@@ -1,0 +1,45 @@
+version: "2.2"
+
+services:
+  db:
+    image: postgres:latest
+    container_name: "gotemplate_db"
+    hostname: "gotemplate_db"
+    environment:
+      POSTGRES_USER: '${PG_USER}'
+      POSTGRES_PASSWORD: '${PG_PWD}'
+      POSTGRES_DB: '${PG_DB}'
+    volumes:
+      - ./db_data:/var/lib/postgresql/data
+    ports:
+      - 5432:5432
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: semior/gotemplate:latest
+    container_name: "gotemplate"
+    hostname: "gotemplate"
+    environment:
+      LOCATION: '${LOCATION}'
+      DEBUG: '${DEBUG}'
+      DB_CONN_STR: '${DB_CONN_STR}'
+      SERVICE_URL: '${SERVICE_URL}'
+      SERVICE_PORT: '${SERVICE_PORT}'
+      EMAIL: '${EMAIL}'
+      PASSWORD: '${PASSWORD}'
+      SECRET: '${SECRET}'
+    volumes:
+      - ./db:/db # add your database location here
+    ports:
+      - 8080:8080
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["/entrypoint.sh", "server"]
