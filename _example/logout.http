@@ -1,2 +1,0 @@
-GET localhost:8080/auth/local/logout
-Content-Type: application/json

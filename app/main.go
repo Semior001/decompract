@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Semior001/gotemplate/app/cmd"
+	"github.com/Semior001/decompract/app/cmd"
 	log "github.com/go-pkgz/lgr"
 	flags "github.com/jessevdk/go-flags"
 )
@@ -21,7 +21,7 @@ type Opts struct {
 var version = "unknown"
 
 func main() {
-	fmt.Printf("gotemplate version: %s\n", version)
+	fmt.Printf("decompract version: %s\n", version)
 	var opts Opts
 	p := flags.NewParser(&opts, flags.Default)
 

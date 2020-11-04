@@ -2,16 +2,7 @@
 package cmd
 
 import (
-	"github.com/Semior001/gotemplate/app/store/service"
-	"github.com/Semior001/gotemplate/app/store/user"
-	bolt "github.com/coreos/bbolt"
-	"log"
-	"path"
-	"strings"
 	"time"
-
-	"github.com/jackc/pgx"
-	"github.com/pkg/errors"
 )
 
 // CommonOptionsCommander extends flags.Commander with SetCommon
@@ -42,51 +33,4 @@ type SMTPGroup struct {
 // The method called by main for each command
 func (c *CommonOpts) SetCommon(opts CommonOpts) {
 	c.Version = opts.Version
-}
-
-func prepareDataStore(connStr string, bcryptCost int) (*service.DataStore, error) {
-	switch {
-	case strings.HasPrefix(connStr, "bolt://"):
-		return prepareBolt(connStr, bcryptCost)
-	case strings.HasSuffix(connStr, "postgres://"):
-		return preparePostgres(connStr, bcryptCost)
-	default:
-		return nil, errors.New("unsupported database engine")
-	}
-}
-
-func preparePostgres(connStr string, cost int) (*service.DataStore, error) {
-	connConf, err := pgx.ParseConnectionString(connStr)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to parse pg user Store with connstr %s", connStr)
-	}
-
-	p, err := pgx.NewConnPool(pgx.ConnPoolConfig{
-		ConnConfig:     connConf,
-		MaxConnections: 5,
-		AcquireTimeout: time.Minute,
-	})
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to initialize pg user Store with connstr %s", connStr)
-	}
-
-	// initializing repositories
-	ur, err := user.NewPostgres(p, connConf)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to initialize postgres user repository at %s", connStr)
-	}
-
-	log.Printf("[INFO] initialized postgres connection pool to %s:%d", connConf.Host, connConf.Port)
-
-	return &service.DataStore{UserRepository: ur, BCryptCost: cost}, nil
-}
-
-func prepareBolt(connStr string, cost int) (*service.DataStore, error) {
-	dirLoc := strings.TrimPrefix(connStr, "bolt://")
-	ur, err := user.NewBoltStorage(path.Join(dirLoc, "users.db"), bolt.Options{})
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to init users store")
-	}
-
-	return &service.DataStore{UserRepository: ur, BCryptCost: cost}, nil
 }

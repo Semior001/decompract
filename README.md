@@ -1,4 +1,4 @@
-# gotemplate ![Go](https://github.com/Semior001/gotemplate/workflows/Go/badge.svg) [![codecov](https://codecov.io/gh/Semior001/gotemplate/branch/master/graph/badge.svg?token=IW8CU4ZDG6)](https://codecov.io/gh/Semior001/gotemplate) 
+# Decompract ![Go](https://github.com/Semior001/decompract/workflows/Go/badge.svg) [![codecov](https://codecov.io/gh/Semior001/decompract/branch/master/graph/badge.svg?token=IW8CU4ZDG6)](https://codecov.io/gh/Semior001/decompract) 
 
 ## Build and Deploy
 
@@ -10,19 +10,6 @@ The application awaits next environment variables provided in .env file in the p
 | DEBUG             | false    | Turn on debug mode                                                                              | true                                                           |
 | SERVICE_URL       |          | URL to the backend service                                                                      | http://0.0.0.0:8080/                                           |
 | SERVICE_PORT      | 8080     | Port of the backend servuce                                                                     | 8080                                                           |
-| EMAIL             |          | Default admin email                                                                             | e.duskaliev@innopolis.university                               |
-| PASSWORD          |          | Default admin password                                                                          | verystrongpassword                                             |
-| SECRET            |          | Secret key for signing JWT tokens                                                               | verystrongsecret                                               |
-| DB_CONN_STR       |          | Connection string to database engine                                                            | postgres://attc:attcpwd@db:5432/attc?sslmode=disable           |
-|                   |          |                                                                                                 | bolt:///Users/semior/go/src/github.com/Semior001/gotemplate/db |
-| DB_TEST           |          | Connection string to database engine for tests (optional, needed only if you want to run tests) | postgres://attc:attcpwd@localhost:5432/attc?sslmode=disable    |
-
-Next environment variables depends on the kind of database that you're using:
-- [Postgres](https://www.postgresql.org/)
-- [Bolt](https://github.com/coreos/bbolt)
-
-**Remark!**. If you decided to do not use the Postgres as a database engine, 
-remove the migration part from the Dockerfile and entrypoint script.
 
 ### Run the application
 ```bash
@@ -33,10 +20,6 @@ docker-compose up -d
 
 ```.env
 DEBUG=true
-
-#DB_CONN_STR=postgres://attc:attcpwd@db:5432/attc?sslmode=disable
-DB_CONN_STR=bolt:///Users/semior/go/src/github.com/Semior001/gotemplate/db
-
 SERVICE_URL=http://0.0.0.0:8080/
 SERVICE_PORT=8080
 EMAIL=e.duskaliev@innopolis.university

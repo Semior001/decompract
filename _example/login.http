@@ -1,7 +1,0 @@
-GET localhost:8080/auth/local/login
-Content-Type: application/json
-
-{
-    "user": "e.duskaliev@innopolis.university",
-    "passwd": "test"
-}

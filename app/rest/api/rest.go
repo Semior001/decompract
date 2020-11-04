@@ -6,11 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Semior001/gotemplate/app/store/service"
-
-	"github.com/go-pkgz/auth"
-
-	"github.com/Semior001/gotemplate/app/rest"
+	"github.com/Semior001/decompract/app/rest"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/httprate"
@@ -22,11 +18,8 @@ import (
 type Rest struct {
 	Version string
 
-	Authenticator *auth.Service
-
 	httpServer *http.Server
 	lock       sync.Mutex
-	DataStore  *service.DataStore
 
 	// todo ctrl groups
 }
@@ -66,25 +59,21 @@ func (s *Rest) controllerGroups() {
 func (s *Rest) routes() chi.Router {
 	r := chi.NewRouter()
 
-	r.Use(R.AppInfo("gotemplate", "Semior001", s.Version))
+	r.Use(R.AppInfo("decompract", "Semior001", s.Version))
 	r.Use(R.Recoverer(log.Default()))
 	r.Use(R.Ping, middleware.RealIP)
 	r.Use(httprate.LimitByIP(100, 1*time.Minute))
 
 	r.NotFound(s.notFound)
 
-	authHandler, _ := s.Authenticator.Handlers()
 	// todo init ctrl groups and insert them into Rest
 	s.controllerGroups()
 
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Timeout(5 * time.Second))
-		r.Mount("/auth", authHandler)
 	})
 
-	m := s.Authenticator.Middleware()
-
-	r.With(m.Auth).Route("/api/v1", func(rapi chi.Router) {
+	r.Route("/api/v1", func(rapi chi.Router) {
 		// todo mount and give patterns for ctrl groups
 	})
 
