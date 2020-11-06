@@ -3,8 +3,11 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/go-chi/render"
 
 	"github.com/Semior001/decompract/app/rest"
 	"github.com/go-chi/chi"
@@ -18,13 +21,11 @@ import (
 type Rest struct {
 	Version string
 
+	WebRoot string
+
 	httpServer *http.Server
 	lock       sync.Mutex
-
-	// todo ctrl groups
 }
-
-const hardBodyLimit = 1024 * 64 //nolint // limit size of body
 
 // Run starts the web-server for listening
 func (s *Rest) Run(port int) {
@@ -52,10 +53,6 @@ func (s *Rest) notFound(w http.ResponseWriter, r *http.Request) {
 	rest.SendErrorJSON(w, r, http.StatusNotFound, nil, "not found", rest.ErrBadRequest)
 }
 
-func (s *Rest) controllerGroups() {
-	// todo create ctrl groups
-}
-
 func (s *Rest) routes() chi.Router {
 	r := chi.NewRouter()
 
@@ -66,16 +63,47 @@ func (s *Rest) routes() chi.Router {
 
 	r.NotFound(s.notFound)
 
-	// todo init ctrl groups and insert them into Rest
-	s.controllerGroups()
-
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Timeout(5 * time.Second))
 	})
 
-	r.Route("/api/v1", func(rapi chi.Router) {
-		// todo mount and give patterns for ctrl groups
+	r.Route("/api", func(rapi chi.Router) {
+		rapi.Post("/plot", s.plotGraphsCtrl)
 	})
 
+	addFileServer(r, "/", http.Dir(s.WebRoot))
+
 	return r
+}
+
+// GET /api/plot - plot graphs according to the given parameters
+func (s *Rest) plotGraphsCtrl(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		rest.SendErrorJSON(w, r, http.StatusBadRequest, err, "failed to parse multipart form", rest.ErrBadRequest)
+		return
+	}
+	render.Status(r, http.StatusOK)
+	render.JSON(w, r, "lol")
+}
+
+func addFileServer(r chi.Router, path string, root http.FileSystem) {
+	log.Printf("[INFO] run file server for %s, path %s", root, path)
+	webFS := http.FileServer(root)
+
+	origPath := path
+	webFS = http.StripPrefix(path, webFS)
+	if path != "/" && path[len(path)-1] != '/' {
+		r.Get(path, http.RedirectHandler(path+"/", 301).ServeHTTP)
+		path += "/"
+	}
+	path += "*"
+
+	r.Get(path, func(w http.ResponseWriter, r *http.Request) {
+		// don't show dirs, just serve files
+		if strings.HasSuffix(r.URL.Path, "/") && len(r.URL.Path) > 1 && r.URL.Path != (origPath+"/") {
+			http.NotFound(w, r)
+			return
+		}
+		webFS.ServeHTTP(w, r)
+	})
 }
