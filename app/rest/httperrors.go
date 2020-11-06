@@ -1,8 +1,11 @@
 package rest
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"html/template"
+	"io"
 	"net/http"
 	"net/url"
 	"runtime"
@@ -10,30 +13,46 @@ import (
 
 	"github.com/go-chi/render"
 	log "github.com/go-pkgz/lgr"
-	R "github.com/go-pkgz/rest"
 )
 
-// ErrCode is used for client mapping and translation
-type ErrCode int
+// errTmplData store data for error message
+type errTmplData struct {
+	Error   string
+	Details string
+}
 
-// All error codes
-const (
-	ErrInternal   ErrCode = 0 // any internal error
-	ErrDecode     ErrCode = 1 // failed to unmarshal incoming request
-	ErrBadRequest ErrCode = 2 // request contains incorrect data or doesn't contain data
-)
+const errHTMLTmpl = `<!DOCTYPE html>
+<html>
+<head>
+		<meta name="viewport" content="width=device-width"/>
+		<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+</head>
+<body>
+<div style="text-align: center; font-family: Arial, sans-serif; font-size: 18px;">
+    <h1 style="position: relative; color: #4fbbd6; margin-top: 0.2em;">DEComPract</h1>
+	<p style="position: relative; max-width: 20em; margin: 0 auto 1em auto; line-height: 1.4em;">{{.Error}}: {{.Details}}.</p>
+</div>
+</body>
+</html>`
 
-// SendErrorJSON makes {error: blah, details: blah} json body and responds with error code
-func SendErrorJSON(w http.ResponseWriter, r *http.Request, httpStatusCode int, err error, errMsg string, errCode ErrCode) {
-	render.Status(r, httpStatusCode)
-
-	if err != nil {
-		log.Printf("[WARN] %s", errDetailsMsg(r, httpStatusCode, err, errMsg))
-		render.JSON(w, r, R.JSON{"error": err.Error(), "details": errMsg, "code": errCode})
-		return
+// SendErrorHTML makes html body with provided template and responds with provided http status code,
+// error code is not included in render as it is intended for UI developers and not for the users
+func SendErrorHTML(w http.ResponseWriter, r *http.Request, httpStatusCode int, err error, details string) {
+	// MustExecute behaves like template.Execute, but panics if an error occurs.
+	MustExecute := func(tmpl *template.Template, wr io.Writer, data interface{}) {
+		if err = tmpl.Execute(wr, data); err != nil {
+			panic(err)
+		}
 	}
-
-	render.JSON(w, r, R.JSON{"error": nil, "details": errMsg, "code": errCode})
+	tmpl := template.Must(template.New("error").Parse(errHTMLTmpl))
+	log.Printf("[WARN] %s", errDetailsMsg(r, httpStatusCode, err, details))
+	render.Status(r, httpStatusCode)
+	msg := bytes.Buffer{}
+	MustExecute(tmpl, &msg, errTmplData{
+		Error:   err.Error(),
+		Details: details,
+	})
+	render.HTML(w, r, msg.String())
 }
 
 func errDetailsMsg(r *http.Request, code int, err error, msg string) string {

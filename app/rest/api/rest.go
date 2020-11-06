@@ -1,11 +1,15 @@
 package api
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Semior001/decompract/app/solver"
 
 	"github.com/go-chi/render"
 
@@ -20,8 +24,9 @@ import (
 // Rest defines a simple web server for routing to calendar REST api methods
 type Rest struct {
 	Version string
-
 	WebRoot string
+
+	Solvers []solver.Interface
 
 	httpServer *http.Server
 	lock       sync.Mutex
@@ -50,7 +55,7 @@ func (s *Rest) makeHTTPServer(port int, routes chi.Router) *http.Server {
 
 // notFound returns standard 404 not found message
 func (s *Rest) notFound(w http.ResponseWriter, r *http.Request) {
-	rest.SendErrorJSON(w, r, http.StatusNotFound, nil, "not found", rest.ErrBadRequest)
+	rest.SendErrorHTML(w, r, http.StatusNotFound, nil, "not found")
 }
 
 func (s *Rest) routes() chi.Router {
@@ -79,11 +84,40 @@ func (s *Rest) routes() chi.Router {
 // GET /api/plot - plot graphs according to the given parameters
 func (s *Rest) plotGraphsCtrl(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		rest.SendErrorJSON(w, r, http.StatusBadRequest, err, "failed to parse multipart form", rest.ErrBadRequest)
+		rest.SendErrorHTML(w, r, http.StatusBadRequest, err, "failed to parse form data")
 		return
 	}
+
+	var x0, y0, xEnd, n float64
+	if len(r.Form["x0"]) != 1 || len(r.Form["y0"]) != 1 || len(r.Form["x_end"]) != 1 || len(r.Form["n"]) != 1 {
+		rest.SendErrorHTML(w, r, http.StatusBadRequest, errors.New("invalid request"),
+			"some fields are empty or contains more or less entries, than needed")
+		return
+	}
+	if err := json.Unmarshal([]byte(r.Form["x0"][0]), &x0); err != nil {
+		rest.SendErrorHTML(w, r, http.StatusForbidden, err, "can't read x0")
+		return
+	}
+	if err := json.Unmarshal([]byte(r.Form["y0"][0]), &y0); err != nil {
+		rest.SendErrorHTML(w, r, http.StatusForbidden, err, "can't read y0")
+		return
+	}
+	if err := json.Unmarshal([]byte(r.Form["x_end"][0]), &xEnd); err != nil {
+		rest.SendErrorHTML(w, r, http.StatusForbidden, err, "can't read xEnd")
+		return
+	}
+	if err := json.Unmarshal([]byte(r.Form["n"][0]), &n); err != nil {
+		rest.SendErrorHTML(w, r, http.StatusForbidden, err, "can't read n")
+		return
+	}
+
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, "lol")
+	render.JSON(w, r, map[string]interface{}{
+		"x0":   x0,
+		"y0":   y0,
+		"xend": xEnd,
+		"n":    n,
+	})
 }
 
 func addFileServer(r chi.Router, path string, root http.FileSystem) {
