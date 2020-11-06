@@ -10,6 +10,11 @@ type Euler struct {
 	F func(x, y float64) (float64, error) // calculator for f(x,y) = y'
 }
 
+// Name returns the name of this method
+func (*Euler) Name() string {
+	return "Euler's method"
+}
+
 // Solve the initial value problem with Euler method
 func (e *Euler) Solve(stepSize, x0, y0, xEnd float64, dr Drawer) error {
 	x := x0

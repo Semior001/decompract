@@ -1,13 +1,22 @@
 package api
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"html/template"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
+
+	"gonum.org/v1/plot/plotter"
+
+	"github.com/Semior001/decompract/app/graph"
+
+	"github.com/pkg/errors"
 
 	"github.com/Semior001/decompract/app/solver"
 
@@ -21,12 +30,52 @@ import (
 	R "github.com/go-pkgz/rest"
 )
 
+const plotHTMLTmpl = `<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width"/>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+</head>
+<body>
+<div style="text-align: center; font-family: Arial, sans-serif; font-size: 18px;">
+    <h1 style="position: relative; color: #4fbbd6; margin-top: 0.2em;">DEComPract</h1>
+    <h3 style="position: relative; color: #666666; margin-top: 0.2em;">Yelshat Duskaliyev, B19-04</h3>
+    <p>x<sub>0</sub>={{printf "%.4f" .X0}}; y<sub>0</sub>={{printf "%.4f" .Y0}}; X = {{printf "%.4f" .XEnd}}; N = {{.N}}</p>
+</div>
+<table width="100%" style="align-content: center; font-family: Arial, sans-serif; font-size: 18px; position: relative; margin-top: 0.2em;">
+    <tr>
+        <td>Solutions</td>
+        <td>Errors</td>
+    </tr>
+    <tr>
+        <td><img width="100%" src="data:image/jpg;base64,{{.SolutionsImg}}" alt="solutions plot"></td>
+        <td><img width="100%" src="data:image/jpg;base64,{{.LTEImg}}" alt="lte plot"></td>
+    </tr>
+	<tr>
+        <td></td>
+        <td><img width="100%" src="data:image/jpg;base64,{{.GTEImg}}" alt="gte plot"></td>
+    </tr>
+</table>
+</body>
+</html>`
+
+type plotTmplData struct {
+	X0           float64
+	Y0           float64
+	XEnd         float64
+	N            int
+	SolutionsImg string
+	LTEImg       string
+	GTEImg       string
+}
+
 // Rest defines a simple web server for routing to calendar REST api methods
 type Rest struct {
 	Version string
 	WebRoot string
 
 	Solvers []solver.Interface
+	Plotter graph.Plotter
 
 	httpServer *http.Server
 	lock       sync.Mutex
@@ -72,52 +121,101 @@ func (s *Rest) routes() chi.Router {
 		r.Use(middleware.Timeout(5 * time.Second))
 	})
 
-	r.Route("/api", func(rapi chi.Router) {
-		rapi.Post("/plot", s.plotGraphsCtrl)
-	})
-
 	addFileServer(r, "/", http.Dir(s.WebRoot))
+	r.Post("/", s.plotGraphsCtrl)
 
 	return r
 }
 
 // GET /api/plot - plot graphs according to the given parameters
 func (s *Rest) plotGraphsCtrl(w http.ResponseWriter, r *http.Request) {
+	// reading form
 	if err := r.ParseForm(); err != nil {
 		rest.SendErrorHTML(w, r, http.StatusBadRequest, err, "failed to parse form data")
 		return
 	}
+	req, err := readVals(r.Form)
+	if err != nil {
+		rest.SendErrorHTML(w, r, http.StatusForbidden, err, "failed to read request values")
+		return
+	}
 
-	var x0, y0, xEnd, n float64
-	if len(r.Form["x0"]) != 1 || len(r.Form["y0"]) != 1 || len(r.Form["x_end"]) != 1 || len(r.Form["n"]) != 1 {
-		rest.SendErrorHTML(w, r, http.StatusBadRequest, errors.New("invalid request"),
-			"some fields are empty or contains more or less entries, than needed")
+	var lines []graph.Line
+
+	// solving equation by the given solvers
+	for _, slvr := range s.Solvers {
+		name := slvr.Name()
+
+		var pts []plotter.XY
+		err := slvr.Solve(solver.CalculateStepSize(req.N, req.X0, req.XEnd), req.X0, req.Y0, req.XEnd,
+			solver.DrawerFunc(func(ps solver.Point) error {
+				pts = append(pts, ps.XY())
+				return nil
+			}),
+		)
+		if err != nil {
+			rest.SendErrorHTML(w, r, http.StatusBadRequest, err, fmt.Sprintf("can't solve with %s", name))
+			return
+		}
+
+		lines = append(lines, graph.Line{Name: name, Points: pts})
+	}
+
+	// plotting solutions graph
+	b, err := s.Plotter.Plot("Solutions", lines)
+	if err != nil {
+		rest.SendErrorHTML(w, r, http.StatusInternalServerError, err, "can't plot the graph")
 		return
 	}
-	if err := json.Unmarshal([]byte(r.Form["x0"][0]), &x0); err != nil {
-		rest.SendErrorHTML(w, r, http.StatusForbidden, err, "can't read x0")
-		return
-	}
-	if err := json.Unmarshal([]byte(r.Form["y0"][0]), &y0); err != nil {
-		rest.SendErrorHTML(w, r, http.StatusForbidden, err, "can't read y0")
-		return
-	}
-	if err := json.Unmarshal([]byte(r.Form["x_end"][0]), &xEnd); err != nil {
-		rest.SendErrorHTML(w, r, http.StatusForbidden, err, "can't read xEnd")
-		return
-	}
-	if err := json.Unmarshal([]byte(r.Form["n"][0]), &n); err != nil {
-		rest.SendErrorHTML(w, r, http.StatusForbidden, err, "can't read n")
-		return
+
+	b64img := base64.StdEncoding.EncodeToString(b)
+
+	buf := &bytes.Buffer{}
+	tmpl := template.Must(template.New("plot").Parse(plotHTMLTmpl))
+	err = tmpl.Execute(buf, plotTmplData{
+		X0:           req.X0,
+		Y0:           req.Y0,
+		XEnd:         req.XEnd,
+		N:            req.N,
+		SolutionsImg: b64img,
+		LTEImg:       "",
+	})
+	if err != nil {
+		rest.SendErrorHTML(w, r, http.StatusInternalServerError, err, "can't execute template")
 	}
 
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, map[string]interface{}{
-		"x0":   x0,
-		"y0":   y0,
-		"xend": xEnd,
-		"n":    n,
-	})
+	render.HTML(w, r, buf.String())
+}
+
+type solveRequest struct {
+	X0   float64
+	Y0   float64
+	XEnd float64
+	N    int
+}
+
+func readVals(v url.Values) (req solveRequest, err error) {
+	var x0, y0, xEnd float64
+	var n int
+
+	if len(v["x0"]) != 1 || len(v["y0"]) != 1 || len(v["x_end"]) != 1 || len(v["n"]) != 1 {
+		return solveRequest{}, errors.New("some fields are empty or contains more or less entries, than needed")
+	}
+	if err := json.Unmarshal([]byte(v["x0"][0]), &x0); err != nil {
+		return solveRequest{}, errors.Wrap(err, "can't read x0")
+	}
+	if err := json.Unmarshal([]byte(v["y0"][0]), &y0); err != nil {
+		return solveRequest{}, errors.Wrap(err, "can't read y0")
+	}
+	if err := json.Unmarshal([]byte(v["x_end"][0]), &xEnd); err != nil {
+		return solveRequest{}, errors.Wrap(err, "can't read xEnd")
+	}
+	if err := json.Unmarshal([]byte(v["n"][0]), &n); err != nil {
+		return solveRequest{}, errors.Wrap(err, "can't read n")
+	}
+
+	return solveRequest{X0: x0, Y0: y0, XEnd: xEnd, N: n}, nil
 }
 
 func addFileServer(r chi.Router, path string, root http.FileSystem) {

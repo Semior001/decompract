@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width"/>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+</head>
+<body>
+<div style="text-align: center; font-family: Arial, sans-serif; font-size: 18px;">
+    <h1 style="position: relative; color: #4fbbd6; margin-top: 0.2em;">DEComPract</h1>
+    <h3 style="position: relative; color: #666666; margin-top: 0.2em;">Yelshat Duskaliyev, B19-04</h3>
+    <p>x<sub>0</sub>={{printf "%.4f" .X0}}; y<sub>0</sub>={{printf "%.4f" .Y0}}; X = {{printf "%.4f" .XEnd}}; N = {{.N}}</p>
+</div>
+<table width="100%" style="align-content: center; font-family: Arial, sans-serif; font-size: 18px; position: relative; margin-top: 0.2em;">
+    <tr>
+        <td>Solutions</td>
+        <td>Errors</td>
+    </tr>
+    <tr>
+        <td><img width="100%" src="data:image/jpg;base64,{{.SolutionsImg}}" alt="solutions plot"></td>
+        <td><img width="100%" src="data:image/jpg;base64,{{.ErrorsImg}}" alt="errors plot"></td>
+    </tr>
+</table>
+</body>
+</html>

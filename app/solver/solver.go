@@ -1,11 +1,16 @@
 package solver
 
-import "fmt"
+import (
+	"fmt"
+
+	"gonum.org/v1/plot/plotter"
+)
 
 // Interface describes methods that the solver should implement
 // in order to solve the Initial Value problem
 type Interface interface {
 	Solve(stepSize, x0, y0, xEnd float64, dr Drawer) (err error)
+	Name() string
 }
 
 // Drawer draws a line by the given set of points
@@ -28,6 +33,11 @@ type Point struct {
 // String implements fmt.Stringer to properly print points
 func (p Point) String() string {
 	return fmt.Sprintf("(%.4f, %.4f)", p.X, p.Y)
+}
+
+// XY converts the internal DAO point into plotter's plotter.XY
+func (p Point) XY() plotter.XY {
+	return plotter.XY{X: p.X, Y: p.Y}
 }
 
 // CalculateStepSize from the given number of steps

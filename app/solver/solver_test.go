@@ -85,6 +85,13 @@ func TestSolvers(t *testing.T) {
 	}
 }
 
+func TestNames(t *testing.T) {
+	assert.Equal(t, "Exact solution", (&Exact{}).Name())
+	assert.Equal(t, "Euler's method", (&Euler{}).Name())
+	assert.Equal(t, "Improved Euler's method", (&ImprovedEuler{}).Name())
+	assert.Equal(t, "Runge-Kutta's method", (&RungeKutta{}).Name())
+}
+
 func TestExact_Solve(t *testing.T) {
 	e := &Exact{
 		F: func(x, c float64) (float64, error) { return math.Exp(-x) / (c*math.Exp(x) + 1), nil },

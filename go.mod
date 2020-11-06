@@ -8,6 +8,7 @@ require (
 	github.com/go-chi/render v1.0.1
 	github.com/go-pkgz/lgr v0.10.4
 	github.com/go-pkgz/rest v1.5.0
+	github.com/google/uuid v1.1.2
 	github.com/jessevdk/go-flags v1.4.0
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/pkg/errors v0.9.1

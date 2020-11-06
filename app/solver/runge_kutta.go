@@ -10,6 +10,11 @@ type RungeKutta struct {
 	F func(x, y float64) (float64, error) // calculator for f(x,y) = y'
 }
 
+// Name returns the name of this method
+func (*RungeKutta) Name() string {
+	return "Runge-Kutta's method"
+}
+
 // Solve the differential equation with the given initial values
 func (r *RungeKutta) Solve(stepSize, x0, y0, xEnd float64, dr Drawer) error {
 	x := x0

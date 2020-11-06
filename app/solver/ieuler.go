@@ -10,6 +10,11 @@ type ImprovedEuler struct {
 	F func(x, y float64) (float64, error) // calculator for f(x,y) = y'
 }
 
+// Name returns the name of this method
+func (*ImprovedEuler) Name() string {
+	return "Improved Euler's method"
+}
+
 // Solve the differential equations with the given initial data
 func (i *ImprovedEuler) Solve(stepSize, x0, y0, xEnd float64, dr Drawer) error {
 	x := x0
@@ -28,7 +33,7 @@ func (i *ImprovedEuler) Solve(stepSize, x0, y0, xEnd float64, dr Drawer) error {
 			return errors.Wrap(err, "failed to calculate delta y")
 		}
 		y = y + dy
-		x += xEnd
+		x += stepSize
 	}
 
 	return nil

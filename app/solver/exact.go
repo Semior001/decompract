@@ -12,6 +12,11 @@ type Exact struct {
 	C func(x0, y0 float64) (float64, error)
 }
 
+// Name returns the name of this method
+func (*Exact) Name() string {
+	return "Exact solution"
+}
+
 // Solve just plots the graph, without applying any algorithm`
 func (e *Exact) Solve(stepSize, x0, y0, xEnd float64, dr Drawer) error {
 	x := x0
