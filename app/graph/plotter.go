@@ -12,6 +12,9 @@ import (
 	"gonum.org/v1/plot/plotter"
 )
 
+const w = 10 * vg.Inch
+const h = w
+
 // Plotter plots the image and saves it in temporary directory
 type Plotter struct {
 	DirPath string
@@ -40,7 +43,7 @@ func (pl *Plotter) Plot(title string, lines []Line) ([]byte, error) {
 
 	b := &bytes.Buffer{}
 
-	wt, err := p.WriterTo(16*vg.Inch, 16*vg.Inch, "png")
+	wt, err := p.WriterTo(w, h, "png")
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to instantiate writer for the plot %s", title)
 	}
