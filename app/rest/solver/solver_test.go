@@ -84,3 +84,11 @@ func TestSolvers(t *testing.T) {
 		require.NoError(t, err)
 	}
 }
+
+func TestPoint_String(t *testing.T) {
+	assert.Equal(t, "(0.0003, 0.1235)", Point{0.0003, 0.123456789}.String())
+}
+
+func TestCalculateStepSize(t *testing.T) {
+	assert.InDelta(t, 0.26667, CalculateStepSize(30, -4.0, 4.0), 0.00001)
+}
