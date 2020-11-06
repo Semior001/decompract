@@ -20,9 +20,7 @@ func (i *ImprovedEuler) Solve(stepSize, x0, y0, xEnd float64, dr Drawer) error {
 
 	for x < xEnd {
 		if err := dr.Draw(Point{X: x, Y: y}); err != nil {
-			return errors.Wrapf(err,
-				"failed to draw a point (%.4f, %.4f) for stepsz = %.4f, x0 = %.4f, y0 = %.4f, xend = %.4f",
-				x, y, stepSize, x0, y0, xEnd)
+			return errors.Wrapf(err, "failed to draw a point (%.4f, %.4f)", x, y)
 		}
 
 		dy, err := i.calculateDeltaY(stepSize, x, y)

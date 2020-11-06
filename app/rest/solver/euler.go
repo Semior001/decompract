@@ -22,13 +22,11 @@ func (e *Euler) Solve(stepSize, x0, y0, xEnd float64, dr Drawer) error {
 
 	for x < xEnd {
 		if err := dr.Draw(Point{X: x, Y: y}); err != nil {
-			return errors.Wrapf(err,
-				"failed to draw a point (%.4f, %.4f) for stepsz = %.4f, x0 = %.4f, y0 = %.4f, xend = %.4f",
-				x, y, stepSize, x0, y0, xEnd)
+			return errors.Wrapf(err, "failed to draw a point (%.4f, %.4f)", x, y)
 		}
 
 		if f, err = e.F(x, y); err != nil {
-			return errors.Wrapf(err, "failed to calculate f for x=%.4f y=%.4f", x0, y0)
+			return errors.Wrapf(err, "failed to calculate f for x=%.4f y=%.4f", x, y)
 		}
 
 		// calculating the next x, y values
