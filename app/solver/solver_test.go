@@ -1,7 +1,7 @@
 package solver
 
 import (
-	"fmt"
+	"math"
 	"testing"
 
 	log "github.com/go-pkgz/lgr"
@@ -76,13 +76,48 @@ func TestSolvers(t *testing.T) {
 	for _, entry := range tbl {
 		step := 0
 		err := entry.solver.Solve(0.1, 0, 1, 1, DrawerFunc(func(ps Point) error {
-			assert.InDelta(t, entry.points[step].X, ps.X, entry.precision, fmt.Sprintf("Method: %s, step: %d", entry.name, step))
-			assert.InDelta(t, entry.points[step].Y, ps.Y, entry.precision, fmt.Sprintf("Method: %s, step: %d", entry.name, step))
+			assert.InDelta(t, entry.points[step].Y, ps.Y, entry.precision, "method: %s, step: %d", entry.name, step)
+			assert.InDelta(t, entry.points[step].X, ps.X, entry.precision, "method: %s, step: %d", entry.name, step)
 			step++
 			return nil
 		}))
 		require.NoError(t, err)
 	}
+}
+
+func TestExact_Solve(t *testing.T) {
+	e := &Exact{
+		F: func(x, c float64) (float64, error) { return math.Exp(-x) / (c*math.Exp(x) + 1), nil },
+		C: func(x0, y0 float64) (float64, error) { return (math.Exp(-x0) - y0) / (y0 * math.Exp(x0)), nil }, // 2926.3598370085842
+	}
+	points := []Point{
+		{-4.0, 1.00000000},
+		{-3.5, 0.37054986},
+		{-3.0, 0.13692051},
+		{-2.5, 0.05050571},
+		{-2.0, 0.01861037},
+		{-1.5, 0.00685316},
+		{-1.0, 0.00252266},
+		{-0.5, 0.00092837},
+		{+0.0, 0.00034160},
+		{+0.5, 0.00012569},
+		{+1.0, 0.00004624},
+		{+1.5, 0.00001701},
+		{+2.0, 0.00000626},
+		{+2.5, 0.00000230},
+		{+3.0, 0.00000085},
+		{+3.5, 0.00000031},
+		{+4.0, 0.00000011},
+	}
+
+	step := 0
+	err := e.Solve(0.5, -4, 1, 4, DrawerFunc(func(ps Point) error {
+		assert.InDelta(t, points[step].X, ps.X, 0.00000001, "step #%d", step)
+		assert.InDelta(t, points[step].Y, ps.Y, 0.00000001, "step #%d", step)
+		step++
+		return nil
+	}))
+	require.NoError(t, err)
 }
 
 func TestPoint_String(t *testing.T) {
