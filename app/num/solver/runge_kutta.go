@@ -1,6 +1,7 @@
 package solver
 
 import (
+	"github.com/Semior001/decompract/app/num"
 	log "github.com/go-pkgz/lgr"
 	"github.com/pkg/errors"
 )
@@ -10,13 +11,8 @@ type RungeKutta struct {
 	F func(x, y float64) (float64, error) // calculator for f(x,y) = y'
 }
 
-// Name returns the name of this method
-func (*RungeKutta) Name() string {
-	return "Runge-Kutta's method"
-}
-
 // Solve the differential equation with the given initial values
-func (r *RungeKutta) Solve(stepSize, x0, y0, xEnd float64, dr Drawer) error {
+func (r *RungeKutta) Solve(stepSize, x0, y0, xEnd float64) (num.Line, error) {
 	x := x0
 	y := y0
 	var k1, k2, k3, k4 float64
@@ -25,25 +21,25 @@ func (r *RungeKutta) Solve(stepSize, x0, y0, xEnd float64, dr Drawer) error {
 	log.Printf("[DEBUG] starting solving the equation with Runge-Kutta's "+
 		"method with stepsz = %.4f, x0 = %.4f, y0 = %.4f, xend = %.4f", stepSize, x0, y0, xEnd)
 
-	for x < xEnd {
-		if err := dr.Draw(Point{X: x, Y: y}); err != nil {
-			return errors.Wrapf(err, "failed to draw a point (%.4f, %.4f)", x, y)
-		}
+	var pts []num.Point
+
+	for x <= xEnd {
+		pts = append(pts, num.Point{X: x, Y: y})
 
 		if k1, err = r.F(x, y); err != nil {
-			return errors.Wrapf(err, "failed to calculate k1 for x=%.4f y=%.4f", x, y)
+			return num.Line{}, errors.Wrapf(err, "failed to calculate k1 for x=%.4f y=%.4f", x, y)
 		}
 
 		if k2, err = r.F(x+stepSize/2.0, y+(stepSize/2.0)*k1); err != nil {
-			return errors.Wrapf(err, "failed to calculate k2 for h=%.4f, x=%4.f, y=%.4f, k1=%.4f", stepSize, x, y, k1)
+			return num.Line{}, errors.Wrapf(err, "failed to calculate k2 for h=%.4f, x=%4.f, y=%.4f, k1=%.4f", stepSize, x, y, k1)
 		}
 
 		if k3, err = r.F(x+stepSize/2.0, y+(stepSize/2.0)*k2); err != nil {
-			return errors.Wrapf(err, "failed to calculate k3 for h=%.4f, x=%4.f, y=%.4f, k2=%.4f", stepSize, x, y, k2)
+			return num.Line{}, errors.Wrapf(err, "failed to calculate k3 for h=%.4f, x=%4.f, y=%.4f, k2=%.4f", stepSize, x, y, k2)
 		}
 
 		if k4, err = r.F(x+stepSize, y+stepSize*k3); err != nil {
-			return errors.Wrapf(err, "failed to calculate k4 for h=%.4f, x=%4.f, y=%.4f, k3=%.4f", stepSize, x, y, k3)
+			return num.Line{}, errors.Wrapf(err, "failed to calculate k4 for h=%.4f, x=%4.f, y=%.4f, k3=%.4f", stepSize, x, y, k3)
 		}
 
 		deltaY := stepSize / 6.0 * (k1 + 2*k2 + 2*k3 + k4)
@@ -52,5 +48,5 @@ func (r *RungeKutta) Solve(stepSize, x0, y0, xEnd float64, dr Drawer) error {
 		x += stepSize
 	}
 
-	return nil
+	return num.Line{Name: "Runge-Kutta's method", Points: pts}, nil
 }

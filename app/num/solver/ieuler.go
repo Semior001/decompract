@@ -1,6 +1,7 @@
 package solver
 
 import (
+	"github.com/Semior001/decompract/app/num"
 	log "github.com/go-pkgz/lgr"
 	"github.com/pkg/errors"
 )
@@ -10,33 +11,27 @@ type ImprovedEuler struct {
 	F func(x, y float64) (float64, error) // calculator for f(x,y) = y'
 }
 
-// Name returns the name of this method
-func (*ImprovedEuler) Name() string {
-	return "Improved Euler's method"
-}
-
 // Solve the differential equations with the given initial data
-func (i *ImprovedEuler) Solve(stepSize, x0, y0, xEnd float64, dr Drawer) error {
+func (i *ImprovedEuler) Solve(stepSize, x0, y0, xEnd float64) (num.Line, error) {
 	x := x0
 	y := y0
 
 	log.Printf("[DEBUG] starting solving the equation with Improved Euler's "+
 		"method with stepsz = %.4f, x0 = %.4f, y0 = %.4f, xend = %.4f", stepSize, x0, y0, xEnd)
 
-	for x < xEnd {
-		if err := dr.Draw(Point{X: x, Y: y}); err != nil {
-			return errors.Wrapf(err, "failed to draw a point (%.4f, %.4f)", x, y)
-		}
+	var pts []num.Point
+	for x <= xEnd {
+		pts = append(pts, num.Point{X: x, Y: y})
 
 		dy, err := i.calculateDeltaY(stepSize, x, y)
 		if err != nil {
-			return errors.Wrap(err, "failed to calculate delta y")
+			return num.Line{}, errors.Wrap(err, "failed to calculate delta y")
 		}
 		y = y + dy
 		x += stepSize
 	}
 
-	return nil
+	return num.Line{Name: "Improved Euler's method", Points: pts}, nil
 }
 
 // calculateDeltaY calculates:

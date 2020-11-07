@@ -1,6 +1,7 @@
 package solver
 
 import (
+	"github.com/Semior001/decompract/app/num"
 	log "github.com/go-pkgz/lgr"
 	"github.com/pkg/errors"
 )
@@ -10,13 +11,8 @@ type Euler struct {
 	F func(x, y float64) (float64, error) // calculator for f(x,y) = y'
 }
 
-// Name returns the name of this method
-func (*Euler) Name() string {
-	return "Euler's method"
-}
-
 // Solve the initial value problem with Euler method
-func (e *Euler) Solve(stepSize, x0, y0, xEnd float64, dr Drawer) error {
+func (e *Euler) Solve(stepSize, x0, y0, xEnd float64) (num.Line, error) {
 	x := x0
 	y := y0
 	var f float64
@@ -25,13 +21,12 @@ func (e *Euler) Solve(stepSize, x0, y0, xEnd float64, dr Drawer) error {
 	log.Printf("[DEBUG] starting solving the equation with Euler's "+
 		"method with stepsz = %.4f, x0 = %.4f, y0 = %.4f, xend = %.4f", stepSize, x0, y0, xEnd)
 
-	for x < xEnd {
-		if err := dr.Draw(Point{X: x, Y: y}); err != nil {
-			return errors.Wrapf(err, "failed to draw a point (%.4f, %.4f)", x, y)
-		}
+	var pts []num.Point
+	for x <= xEnd {
+		pts = append(pts, num.Point{X: x, Y: y})
 
 		if f, err = e.F(x, y); err != nil {
-			return errors.Wrapf(err, "failed to calculate f for x=%.4f y=%.4f", x, y)
+			return num.Line{}, errors.Wrapf(err, "failed to calculate f for x=%.4f y=%.4f", x, y)
 		}
 
 		// calculating the next x, y values
@@ -39,7 +34,7 @@ func (e *Euler) Solve(stepSize, x0, y0, xEnd float64, dr Drawer) error {
 		x += stepSize
 	}
 
-	return nil
+	return num.Line{Name: "Euler's method", Points: pts}, nil
 }
 
 // calculate y value as

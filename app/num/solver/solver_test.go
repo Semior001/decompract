@@ -4,6 +4,8 @@ import (
 	"math"
 	"testing"
 
+	"github.com/Semior001/decompract/app/num"
+
 	log "github.com/go-pkgz/lgr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,13 +16,13 @@ func TestSolvers(t *testing.T) {
 	tbl := []struct {
 		solver    Interface
 		name      string
-		points    []Point
+		points    []num.Point
 		precision float64
 	}{
 		{
 			solver: &Euler{F: func(x, y float64) (float64, error) { return x*x - 2.0*y, nil }},
-			name:   "Euler",
-			points: []Point{
+			name:   "Euler's method",
+			points: []num.Point{
 				{0.0, 1.00000},
 				{0.1, 0.80000},
 				{0.2, 0.64100},
@@ -37,8 +39,8 @@ func TestSolvers(t *testing.T) {
 		},
 		{
 			solver: &ImprovedEuler{F: func(x, y float64) (float64, error) { return x*x - 2.0*y, nil }},
-			name:   "Improved Euler",
-			points: []Point{
+			name:   "Improved Euler's method",
+			points: []num.Point{
 				{0.0, 1.000000},
 				{0.1, 0.820250},
 				{0.2, 0.674755},
@@ -55,8 +57,8 @@ func TestSolvers(t *testing.T) {
 		},
 		{
 			solver: &RungeKutta{F: func(x, y float64) (float64, error) { return x*x - 2.0*y, nil }},
-			name:   "Runge-Kutta",
-			points: []Point{
+			name:   "Runge-Kutta's method",
+			points: []num.Point{
 				{0.0, 1.000000},
 				{0.1, 0.819051},
 				{0.2, 0.672745},
@@ -74,30 +76,22 @@ func TestSolvers(t *testing.T) {
 	}
 
 	for _, entry := range tbl {
-		step := 0
-		err := entry.solver.Solve(0.1, 0, 1, 1, DrawerFunc(func(ps Point) error {
-			assert.InDelta(t, entry.points[step].Y, ps.Y, entry.precision, "method: %s, step: %d", entry.name, step)
-			assert.InDelta(t, entry.points[step].X, ps.X, entry.precision, "method: %s, step: %d", entry.name, step)
-			step++
-			return nil
-		}))
+		line, err := entry.solver.Solve(0.1, 0, 1, 1)
 		require.NoError(t, err)
+		assert.Equal(t, len(entry.points), len(line.Points), "len are different for method %s", entry.name)
+		assert.Equal(t, entry.name, line.Name, "names, method: %s", entry.name)
+
+		for i := range line.Points {
+			assert.InDelta(t, entry.points[i].X, line.Points[i].X, entry.precision, "method: %s, step: %d", entry.name, i)
+		}
 	}
 }
-
-func TestNames(t *testing.T) {
-	assert.Equal(t, "Exact solution", (&Exact{}).Name())
-	assert.Equal(t, "Euler's method", (&Euler{}).Name())
-	assert.Equal(t, "Improved Euler's method", (&ImprovedEuler{}).Name())
-	assert.Equal(t, "Runge-Kutta's method", (&RungeKutta{}).Name())
-}
-
 func TestExact_Solve(t *testing.T) {
 	e := &Exact{
 		F: func(x, c float64) (float64, error) { return math.Exp(-x) / (c*math.Exp(x) + 1), nil },
 		C: func(x0, y0 float64) (float64, error) { return (math.Exp(-x0) - y0) / (y0 * math.Exp(x0)), nil }, // 2926.3598370085842
 	}
-	points := []Point{
+	points := []num.Point{
 		{-4.0, 1.00000000},
 		{-3.5, 0.37054986},
 		{-3.0, 0.13692051},
@@ -117,20 +111,20 @@ func TestExact_Solve(t *testing.T) {
 		{+4.0, 0.00000011},
 	}
 
-	step := 0
-	err := e.Solve(0.5, -4, 1, 4, DrawerFunc(func(ps Point) error {
-		assert.InDelta(t, points[step].X, ps.X, 0.00000001, "step #%d", step)
-		assert.InDelta(t, points[step].Y, ps.Y, 0.00000001, "step #%d", step)
-		step++
-		return nil
-	}))
+	line, err := e.Solve(0.5, -4, 1, 4)
 	require.NoError(t, err)
+	assert.Equal(t, len(points), len(line.Points), "len are different")
+	assert.Equal(t, "Exact solution", line.Name, "names")
+
+	for i := range line.Points {
+		assert.InDelta(t, points[i].X, line.Points[i].X, 0.00000001, "step: %d", i)
+	}
 }
 
 func TestPoint_String(t *testing.T) {
-	assert.Equal(t, "(0.0003, 0.1235)", Point{0.0003, 0.123456789}.String())
+	assert.Equal(t, "(0.0003, 0.1235)", num.Point{0.0003, 0.123456789}.String())
 }
 
 func TestCalculateStepSize(t *testing.T) {
-	assert.InDelta(t, 0.26667, CalculateStepSize(30, -4.0, 4.0), 0.00001)
+	assert.InDelta(t, 0.26667, num.CalculateStepSize(30, -4.0, 4.0), 0.00001)
 }

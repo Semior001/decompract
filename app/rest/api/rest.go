@@ -6,20 +6,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"math"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
 
-	"gonum.org/v1/plot/plotter"
+	"github.com/Semior001/decompract/app/num/service"
 
-	"github.com/Semior001/decompract/app/graph"
+	"github.com/Semior001/decompract/app/num"
 
 	"github.com/pkg/errors"
-
-	"github.com/Semior001/decompract/app/solver"
 
 	"github.com/go-chi/render"
 
@@ -42,7 +39,7 @@ const plotHTMLTmpl = `<!DOCTYPE html>
 <div style="text-align: center; font-family: Arial, sans-serif; font-size: 18px;">
     <h1 style="position: relative; color: #4fbbd6; margin-top: 0.2em;">DEComPract</h1>
     <h3 style="position: relative; color: #666666; margin-top: 0.2em;">Yelshat Duskaliyev, B19-04</h3>
-    <p>x<sub>0</sub>={{printf "%.4f" .X0}}; y<sub>0</sub>={{printf "%.4f" .Y0}}; X = {{printf "%.4f" .XEnd}}; N = {{.N}}</p>
+    <p>x<sub>0</sub> = {{printf "%.4f" .X0}}; y<sub>0</sub> = {{printf "%.4f" .Y0}}; X = {{printf "%.4f" .XEnd}}; N = {{.N}}; N<sub>min</sub> = {{printf "%.4f"  .NMin}}; N<sub>max</sub> = {{printf "%.4f" .NMax}}</p>
     <a href="/">Enter another data</a>
 </div>
 <table width="100%" style="align-content: center; font-family: Arial, sans-serif; font-size: 18px; position: relative; margin-top: 0.2em;">
@@ -60,6 +57,8 @@ type plotTmplData struct {
 	Y0           float64
 	XEnd         float64
 	N            int
+	NMin         float64
+	NMax         float64
 	SolutionsImg string
 	LTEImg       string
 	GTEImg       string
@@ -70,9 +69,7 @@ type Rest struct {
 	Version string
 	WebRoot string
 
-	Solvers     []solver.Interface
-	ExactSolver *solver.Exact
-	Plotter     graph.Plotter
+	NumService *service.Service
 
 	httpServer *http.Server
 	lock       sync.Mutex
@@ -159,113 +156,21 @@ func (s *Rest) plotGraphsCtrl(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var lines []graph.Line
-
-	// solving equation by the given solvers
-	for _, slvr := range s.Solvers {
-		name := slvr.Name()
-
-		var pts []plotter.XY
-		err := slvr.Solve(solver.CalculateStepSize(req.N, req.X0, req.XEnd), req.X0, req.Y0, req.XEnd,
-			solver.DrawerFunc(func(ps solver.Point) error {
-				pts = append(pts, ps.XY())
-				return nil
-			}),
-		)
-		if err != nil {
-			rest.SendErrorHTML(w, r, http.StatusBadRequest, err, fmt.Sprintf("can't solve with %s", name))
-			return
-		}
-
-		lines = append(lines, graph.Line{Name: name, Points: pts})
-	}
-
-	// adding exact solution
-	var exactPts []plotter.XY
-	err = s.ExactSolver.Solve(solver.CalculateStepSize(req.N, req.X0, req.XEnd), req.X0, req.Y0, req.XEnd,
-		solver.DrawerFunc(func(ps solver.Point) error {
-			exactPts = append(exactPts, ps.XY())
-			return nil
-		}),
-	)
+	// encoding solutions plot
+	b, err := s.NumService.PlotSolutions(num.CalculateStepSize(req.N, req.X0, req.XEnd), req.X0, req.Y0, req.XEnd)
 	if err != nil {
-		rest.SendErrorHTML(w, r, http.StatusBadRequest, err, "can't solve with exact")
+		rest.SendErrorHTML(w, r, http.StatusInternalServerError, err, "failed to plot solutions")
 		return
 	}
+	b64SolPlot := base64.StdEncoding.EncodeToString(b)
 
-	// calculating errors for solvers
-	var lte []graph.Line
-	for _, line := range lines {
-		var pts plotter.XYs
-		for i := range exactPts {
-			y := math.Abs(line.Points[i].Y - exactPts[i].Y)
-			pts = append(pts, plotter.XY{X: exactPts[i].X, Y: y})
-		}
-		lte = append(lte, graph.Line{Name: line.Name, Points: pts})
-	}
-
-	// plotting lte graph
-	b, err := s.Plotter.Plot("LTE", lte)
+	// encoding lte plot
+	b, err = s.NumService.PlotLocalErrors(num.CalculateStepSize(req.N, req.X0, req.XEnd), req.X0, req.Y0, req.XEnd)
 	if err != nil {
-		rest.SendErrorHTML(w, r, http.StatusInternalServerError, err, "can't plot the lte graph")
+		rest.SendErrorHTML(w, r, http.StatusInternalServerError, err, "failed to plot lte")
 		return
 	}
-	b64LTEGraph := base64.StdEncoding.EncodeToString(b)
-
-	// plotting gte max
-	var gte []graph.Line
-	for _, slvr := range s.Solvers {
-		var pts plotter.XYs
-		for i := req.NMin; i < req.NMax; i += 1 {
-			var exactPts plotter.XYs
-			err = s.ExactSolver.Solve(solver.CalculateStepSize(i, req.X0, req.XEnd), req.X0, req.Y0, req.XEnd, solver.DrawerFunc(func(ps solver.Point) error {
-				exactPts = append(exactPts, ps.XY())
-				return nil
-			}))
-			if err != nil {
-				rest.SendErrorHTML(w, r, http.StatusInternalServerError, err, "can't solve for gtes with exact")
-				return
-			}
-
-			var solPts plotter.XYs
-			err = slvr.Solve(solver.CalculateStepSize(i, req.X0, req.XEnd), req.X0, req.Y0, req.XEnd, solver.DrawerFunc(func(ps solver.Point) error {
-				solPts = append(solPts, ps.XY())
-				return nil
-			}))
-			if err != nil {
-				rest.SendErrorHTML(w, r, http.StatusInternalServerError, err, fmt.Sprintf("can't solve for gtes with %s", slvr.Name()))
-				return
-			}
-
-			var mx plotter.XY
-			for j := range exactPts {
-				y := math.Abs(solPts[j].Y - exactPts[j].Y)
-				if j == 0 || y > mx.Y {
-					mx = plotter.XY{X: exactPts[j].X, Y: y}
-				}
-			}
-			pts = append(pts, mx)
-		}
-		gte = append(gte, graph.Line{
-			Name:   slvr.Name(),
-			Points: pts,
-		})
-	}
-	b, err = s.Plotter.Plot("GTE", gte)
-	if err != nil {
-		rest.SendErrorHTML(w, r, http.StatusInternalServerError, err, "can't plot the gte graph")
-		return
-	}
-	b64GTEGraph := base64.StdEncoding.EncodeToString(b)
-
-	// plotting solutions graph
-	lines = append(lines, graph.Line{Name: "Exact solution", Points: exactPts})
-	b, err = s.Plotter.Plot("Solutions", lines)
-	if err != nil {
-		rest.SendErrorHTML(w, r, http.StatusInternalServerError, err, "can't plot the solutions graph")
-		return
-	}
-	b64SolGraph := base64.StdEncoding.EncodeToString(b)
+	b64LTEPlot := base64.StdEncoding.EncodeToString(b)
 
 	// building html template
 	buf := &bytes.Buffer{}
@@ -275,9 +180,10 @@ func (s *Rest) plotGraphsCtrl(w http.ResponseWriter, r *http.Request) {
 		Y0:           req.Y0,
 		XEnd:         req.XEnd,
 		N:            req.N,
-		SolutionsImg: b64SolGraph,
-		GTEImg:       b64GTEGraph,
-		LTEImg:       b64LTEGraph,
+		NMin:         req.NMin,
+		NMax:         req.NMax,
+		SolutionsImg: b64SolPlot,
+		LTEImg:       b64LTEPlot,
 	})
 	if err != nil {
 		rest.SendErrorHTML(w, r, http.StatusInternalServerError, err, "can't execute template")
@@ -293,13 +199,13 @@ type solveRequest struct {
 	Y0   float64
 	XEnd float64
 	N    int
-	NMin int
-	NMax int
+	NMin float64
+	NMax float64
 }
 
 func readVals(v url.Values) (req solveRequest, err error) {
-	var x0, y0, xEnd float64
-	var n, nmin, nmax int
+	var x0, y0, xEnd, nmin, nmax float64
+	var n int
 
 	if len(v["x0"]) != 1 || len(v["y0"]) != 1 || len(v["x_end"]) != 1 || len(v["n"]) != 1 || len(v["nmin"]) != 1 || len(v["nmax"]) != 1 {
 		return solveRequest{}, errors.New("some fields are empty or contains more or less entries, than needed")
