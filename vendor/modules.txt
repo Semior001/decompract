@@ -39,7 +39,6 @@ github.com/golang/freetype/raster
 github.com/golang/freetype/truetype
 # github.com/google/uuid v1.1.2
 ## explicit
-github.com/google/uuid
 # github.com/jessevdk/go-flags v1.4.0
 ## explicit
 github.com/jessevdk/go-flags
@@ -52,6 +51,9 @@ github.com/jung-kurt/gofpdf
 github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.0
 github.com/pmezard/go-difflib/difflib
+# github.com/rakyll/statik v0.1.7
+## explicit
+github.com/rakyll/statik/fs
 # github.com/stretchr/testify v1.6.1
 ## explicit
 github.com/stretchr/testify/assert
