@@ -13,7 +13,7 @@ import (
 
 // Server runs REST API web server
 type Server struct {
-	ServiceURL string `long:"service_url" env:"SERVICE_URL" description:"http service url" required:"true"`
+	ServiceURL string `long:"service_url" env:"SERVICE_URL" description:"http service url" default:"http://localhost:8080"`
 	Port       int    `long:"service_port" env:"SERVICE_PORT" description:"http server port" default:"8080"`
 
 	WebRoot string `long:"web-root" env:"WEB_ROOT" default:"./web" description:"web root directory"`

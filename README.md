@@ -2,6 +2,13 @@
 
 ## Build and Deploy
 
+### Build a binary file
+```bash
+GOOS=windows GOARCH=386 go build -o builds/decompract.exe ./app
+GOOS=linux GOARCH=386 go build -o builds/decompract_linux ./app
+GOOS=darwin GOARCH=amd64 go build -o builds/decompract_macos ./app
+```
+
 ### Environment variables
 The application awaits next environment variables provided in .env file in the project folder:
 
@@ -12,6 +19,11 @@ The application awaits next environment variables provided in .env file in the p
 | SERVICE_PORT      | 8080     | Port of the backend servuce                                                                     | 8080                                                           |
 
 ### Run the application
+Binary file:
+```bash
+decompract server --service_url=http://0.0.0.0:8080/ --service_port=8080
+```
+
 ```bash
 docker-compose up -d
 ```
