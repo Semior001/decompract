@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"math"
+
 	"github.com/Semior001/decompract/app/num/graph"
 	"github.com/Semior001/decompract/app/num/service"
 
@@ -24,14 +26,14 @@ func (s *Server) Execute(_ []string) error {
 	//fxy := func(x, y float64) (float64, error) { return x*x - 2.0*y, nil }
 
 	// 8th variant
-	//fxy := func(x, y float64) (float64, error) {
-	//	return y*y*math.Exp(x) - 2.0*y, nil
-	//}
+	fxy := func(x, y float64) (float64, error) {
+		return y*y*math.Exp(x) - 2.0*y, nil
+	}
 
 	// 9th variant
-	fxy := func(x, y float64) (float64, error) {
-		return 4.0/x/x - y/x - y*y, nil
-	}
+	//fxy := func(x, y float64) (float64, error) {
+	//	return 4.0/x/x - y/x - y*y, nil
+	//}
 
 	srv := api.Rest{
 		Version: s.Version,
@@ -50,16 +52,16 @@ func (s *Server) Execute(_ []string) error {
 				//},
 
 				// 8th variant
-				//F: func(x, c float64) (float64, error) { return math.Exp(-x) / (c*math.Exp(x) + 1), nil },
-				//C: func(x0, y0 float64) (float64, error) { return (math.Exp(-x0) - y0) / (y0 * math.Exp(x0)), nil },
+				F: func(x, c float64) (float64, error) { return math.Exp(-x) / (c*math.Exp(x) + 1), nil },
+				C: func(x0, y0 float64) (float64, error) { return (math.Exp(-x0) - y0) / (y0 * math.Exp(x0)), nil },
 
 				// 9th variant
-				F: func(x, c float64) (float64, error) {
-					return 2 * (c*x*x*x*x - 1) / x / (c*x*x*x*x + 1), nil
-				},
-				C: func(x0, y0 float64) (float64, error) {
-					return (2 + x0*y0) / (x0 * x0 * x0 * x0) / (2 - x0*y0), nil
-				},
+				//F: func(x, c float64) (float64, error) {
+				//	return 2 * (c*x*x*x*x - 1) / x / (c*x*x*x*x + 1), nil
+				//},
+				//C: func(x0, y0 float64) (float64, error) {
+				//	return (2 + x0*y0) / (x0 * x0 * x0 * x0) / (2 - x0*y0), nil
+				//},
 			},
 			Plotter: graph.Plotter{},
 		},

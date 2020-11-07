@@ -13,6 +13,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rakyll/statik/fs"
+
 	"github.com/Semior001/decompract/app/num/solver"
 
 	"github.com/Semior001/decompract/app/num/service"
@@ -46,6 +48,7 @@ const plotHTMLTmpl = `<!DOCTYPE html>
 <div style="text-align: center; font-family: Arial, sans-serif; font-size: 18px;">
     <h1 style="position: relative; color: #4fbbd6; margin-top: 0.2em;">DEComPract</h1>
     <h3 style="position: relative; color: #666666; margin-top: 0.2em;">Yelshat Duskaliyev, B19-04</h3>
+    <p>f(x,y) = {{.Fxy}}; y(x,c) = {{.Yxc}}; C(x<sub>0</sub>,y<sub>0</sub>) = {{.Cx0y0}}</p>
     <p>x<sub>0</sub> = {{printf "%.4f" .X0}}; y<sub>0</sub> = {{printf "%.4f" .Y0}}; X = {{printf "%.4f" .XEnd}}; N = {{.N}}; N<sub>min</sub> = {{.NMin}}; N<sub>max</sub> = {{.NMax}}</p>
     <a href="/">Enter another data</a>
 </div>
@@ -69,6 +72,9 @@ type plotTmplData struct {
 	SolutionsImg string
 	LTEImg       string
 	GTEImg       string
+	Fxy          string
+	Yxc          string
+	Cx0y0        string
 }
 
 // Rest defines a simple web server for routing to calendar REST api methods
@@ -131,15 +137,15 @@ func (s *Rest) routes() chi.Router {
 func addFileServer(r chi.Router, path string, root http.FileSystem) {
 	var webFS http.Handler
 
-	//statikFS, err := fs.New()
-	//if err != nil {
-	//	log.Printf("[DEBUG] no embedded assets loaded, %s", err)
-	log.Printf("[INFO] run file server for %s, path %s", root, path)
-	webFS = http.FileServer(root)
-	//} else {
-	//	log.Printf("[INFO] run file server for %s, embedded", root)
-	//	webFS = http.FileServer(statikFS)
-	//}
+	statikFS, err := fs.New()
+	if err != nil {
+		log.Printf("[DEBUG] no embedded assets loaded, %s", err)
+		log.Printf("[INFO] run file server for %s, path %s", root, path)
+		webFS = http.FileServer(root)
+	} else {
+		log.Printf("[INFO] run file server for %s, embedded", root)
+		webFS = http.FileServer(statikFS)
+	}
 
 	origPath := path
 	webFS = http.StripPrefix(path, webFS)
@@ -159,92 +165,6 @@ func addFileServer(r chi.Router, path string, root http.FileSystem) {
 	})
 }
 
-type parsedFuncs struct {
-	fxy   func(x, y float64) (float64, error)
-	yxc   func(x, c float64) (float64, error)
-	cx0y0 func(x0, y0 float64) (float64, error)
-}
-
-// prepareFuncs parses the string expressions and prepares the functions for the future evaluation
-func prepareFuncs(fxyStr, yxcStr, cStr string) (parsedFuncs, error) {
-	funcs := map[string]govaluate.ExpressionFunction{
-		"exp": govaluate.ExpressionFunction(func(args ...interface{}) (interface{}, error) {
-			if len(args) != 1 {
-				return nil, errors.New("exponent takes only 1 argument")
-			}
-			p, ok := args[0].(float64)
-			if !ok {
-				return nil, errors.New("argument is not of type float64")
-			}
-			return math.Exp(p), nil
-		}),
-	}
-
-	fxyExpr, err := govaluate.NewEvaluableExpressionWithFunctions(fxyStr, funcs)
-	if err != nil {
-		return parsedFuncs{}, errors.Wrap(err, "can't parse f(x,y)")
-	}
-	fxy := func(x, y float64) (float64, error) {
-		params := map[string]interface{}{
-			"x": x,
-			"y": y,
-		}
-		resExpr, err := fxyExpr.Evaluate(params)
-		if err != nil {
-			return 0, errors.Wrap(err, "failed to evaluate expression")
-		}
-		res, ok := resExpr.(float64)
-		if !ok {
-			return 0, errors.Wrap(err, "result is not float64")
-		}
-		return res, nil
-	}
-
-	yxcExpr, err := govaluate.NewEvaluableExpressionWithFunctions(yxcStr, funcs)
-	if err != nil {
-		return parsedFuncs{}, errors.Wrap(err, "can't parse y(x,c)")
-	}
-
-	cExpr, err := govaluate.NewEvaluableExpressionWithFunctions(cStr, funcs)
-	if err != nil {
-		return parsedFuncs{}, errors.Wrap(err, "can't parse c(x0,y0)")
-	}
-
-	yxc := func(x, c float64) (float64, error) {
-		params := map[string]interface{}{
-			"x": x,
-			"c": c,
-		}
-		resExpr, err := yxcExpr.Evaluate(params)
-		if err != nil {
-			return 0, errors.Wrap(err, "failed to evaluate expression")
-		}
-		res, ok := resExpr.(float64)
-		if !ok {
-			return 0, errors.Wrap(err, "result is not float64")
-		}
-		return res, nil
-	}
-
-	cx0y0 := func(x0, y0 float64) (float64, error) {
-		params := map[string]interface{}{
-			"x0": x0,
-			"y0": y0,
-		}
-		resExpr, err := cExpr.Evaluate(params)
-		if err != nil {
-			return 0, errors.Wrap(err, "failed to evaluate expression")
-		}
-		res, ok := resExpr.(float64)
-		if !ok {
-			return 0, errors.Wrap(err, "result is not float64")
-		}
-		return res, nil
-	}
-
-	return parsedFuncs{fxy: fxy, yxc: yxc, cx0y0: cx0y0}, nil
-}
-
 // GET /api/plot - plot graphs according to the given parameters
 func (s *Rest) plotGraphsCtrl(w http.ResponseWriter, r *http.Request) {
 	// reading form
@@ -258,24 +178,27 @@ func (s *Rest) plotGraphsCtrl(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	funcs, err := prepareFuncs(req.fxy, req.yxc, req.c)
-	if err != nil {
-		rest.SendErrorHTML(w, r, http.StatusBadRequest, err, "failed to parse functions")
-		return
-	}
+	// if functions are specified, prepare them
+	if req.fxy != "" && req.yxc != "" && req.c != "" {
+		funcs, err := prepareFuncs(req.fxy, req.yxc, req.c)
+		if err != nil {
+			rest.SendErrorHTML(w, r, http.StatusBadRequest, err, "failed to parse functions")
+			return
+		}
 
-	// initializing services
-	s.NumService = &service.Service{
-		Plotter: s.NumService.Plotter,
-		Solvers: []solver.Interface{
-			&solver.RungeKutta{F: funcs.fxy},
-			&solver.ImprovedEuler{F: funcs.fxy},
-			&solver.Euler{F: funcs.fxy},
-		},
-		ExactSolver: &solver.Exact{
-			F: funcs.yxc,
-			C: funcs.cx0y0,
-		},
+		// initializing services
+		s.NumService = &service.Service{
+			Plotter: s.NumService.Plotter,
+			Solvers: []solver.Interface{
+				&solver.RungeKutta{F: funcs.fxy},
+				&solver.ImprovedEuler{F: funcs.fxy},
+				&solver.Euler{F: funcs.fxy},
+			},
+			ExactSolver: &solver.Exact{
+				F: funcs.yxc,
+				C: funcs.cx0y0,
+			},
+		}
 	}
 
 	// encoding solutions plot
@@ -315,6 +238,9 @@ func (s *Rest) plotGraphsCtrl(w http.ResponseWriter, r *http.Request) {
 		SolutionsImg: b64SolPlot,
 		LTEImg:       b64LTEPlot,
 		GTEImg:       b64GTEPlot,
+		Fxy:          req.fxy,
+		Yxc:          req.yxc,
+		Cx0y0:        req.c,
 	})
 	if err != nil {
 		rest.SendErrorHTML(w, r, http.StatusInternalServerError, err, "can't execute template")
@@ -343,9 +269,7 @@ func readVals(v url.Values) (req solveRequest, err error) {
 
 	if len(v["x0"]) != 1 || len(v["y0"]) != 1 ||
 		len(v["x_end"]) != 1 || len(v["n"]) != 1 ||
-		len(v["nmin"]) != 1 || len(v["nmax"]) != 1 ||
-		len(v["fxy"]) != 1 || len(v["yxc"]) != 1 ||
-		len(v["c"]) != 1 {
+		len(v["nmin"]) != 1 || len(v["nmax"]) != 1 {
 		return solveRequest{}, errors.New("some fields are empty or contains more or less entries, than needed")
 	}
 	if err := json.Unmarshal([]byte(v["x0"][0]), &x0); err != nil {
@@ -378,4 +302,81 @@ func readVals(v url.Values) (req solveRequest, err error) {
 		yxc:  v["yxc"][0],
 		c:    v["c"][0],
 	}, nil
+}
+
+type parsedFuncs struct {
+	fxy   func(x, y float64) (float64, error)
+	yxc   func(x, c float64) (float64, error)
+	cx0y0 func(x0, y0 float64) (float64, error)
+}
+
+// prepareFuncs parses the string expressions and prepares the functions for the future evaluation
+func prepareFuncs(fxyStr, yxcStr, cStr string) (parsedFuncs, error) {
+	funcs := map[string]govaluate.ExpressionFunction{
+		"exp": govaluate.ExpressionFunction(func(args ...interface{}) (interface{}, error) {
+			if len(args) != 1 {
+				return nil, errors.New("exponent takes only 1 argument")
+			}
+			p, ok := args[0].(float64)
+			if !ok {
+				return nil, errors.New("argument is not of type float64")
+			}
+			return math.Exp(p), nil
+		}),
+	}
+
+	fxyExpr, err := govaluate.NewEvaluableExpressionWithFunctions(fxyStr, funcs)
+	if err != nil {
+		return parsedFuncs{}, errors.Wrap(err, "can't parse f(x,y)")
+	}
+	fxy := func(x, y float64) (float64, error) {
+		params := map[string]interface{}{"x": x, "y": y}
+		resExpr, err := fxyExpr.Evaluate(params)
+		if err != nil {
+			return 0, errors.Wrap(err, "failed to evaluate expression")
+		}
+		res, ok := resExpr.(float64)
+		if !ok {
+			return 0, errors.Wrap(err, "result is not float64")
+		}
+		return res, nil
+	}
+
+	yxcExpr, err := govaluate.NewEvaluableExpressionWithFunctions(yxcStr, funcs)
+	if err != nil {
+		return parsedFuncs{}, errors.Wrap(err, "can't parse y(x,c)")
+	}
+
+	cExpr, err := govaluate.NewEvaluableExpressionWithFunctions(cStr, funcs)
+	if err != nil {
+		return parsedFuncs{}, errors.Wrap(err, "can't parse c(x0,y0)")
+	}
+
+	yxc := func(x, c float64) (float64, error) {
+		params := map[string]interface{}{"x": x, "c": c}
+		resExpr, err := yxcExpr.Evaluate(params)
+		if err != nil {
+			return 0, errors.Wrap(err, "failed to evaluate expression")
+		}
+		res, ok := resExpr.(float64)
+		if !ok {
+			return 0, errors.Wrap(err, "result is not float64")
+		}
+		return res, nil
+	}
+
+	cx0y0 := func(x0, y0 float64) (float64, error) {
+		params := map[string]interface{}{"x0": x0, "y0": y0}
+		resExpr, err := cExpr.Evaluate(params)
+		if err != nil {
+			return 0, errors.Wrap(err, "failed to evaluate expression")
+		}
+		res, ok := resExpr.(float64)
+		if !ok {
+			return 0, errors.Wrap(err, "result is not float64")
+		}
+		return res, nil
+	}
+
+	return parsedFuncs{fxy: fxy, yxc: yxc, cx0y0: cx0y0}, nil
 }
