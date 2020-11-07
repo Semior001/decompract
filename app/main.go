@@ -13,8 +13,7 @@ import (
 
 // Opts describes cli arguments and flags to execute a command
 type Opts struct {
-	ServerCmd cmd.Server `command:"server"`
-
+	cmd.Server
 	Dbg bool `long:"dbg" env:"DEBUG" description:"turn on debug mode"`
 }
 
@@ -25,21 +24,6 @@ func main() {
 	var opts Opts
 	p := flags.NewParser(&opts, flags.Default)
 
-	p.CommandHandler = func(command flags.Commander, args []string) error {
-		setupLog(opts.Dbg)
-
-		// commands implements CommonOptionsCommander to allow passing set of extra options defined for all commands
-		c := command.(cmd.CommonOptionsCommander)
-		c.SetCommon(cmd.CommonOpts{
-			Version: version,
-		})
-
-		if err := command.Execute(args); err != nil {
-			log.Printf("[ERROR] failed to execute command %+v", err)
-		}
-		return nil
-	}
-
 	// after failure command does not return non-zero code
 	if _, err := p.Parse(); err != nil {
 		if flagsErr, ok := err.(*flags.Error); ok && flagsErr.Type == flags.ErrHelp {
@@ -47,6 +31,17 @@ func main() {
 		} else {
 			os.Exit(1)
 		}
+	}
+
+	setupLog(opts.Dbg)
+
+	// commands implements CommonOptionsCommander to allow passing set of extra options defined for all commands
+	opts.SetCommon(cmd.CommonOpts{
+		Version: version,
+	})
+
+	if err := opts.Execute(os.Args[1:]); err != nil {
+		log.Printf("[ERROR] failed to execute command %+v", err)
 	}
 }
 

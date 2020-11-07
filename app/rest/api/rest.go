@@ -8,7 +8,6 @@ import (
 	"html/template"
 	"math"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -165,14 +164,10 @@ func addFileServer(r chi.Router, path string, root http.FileSystem) {
 	})
 }
 
-// GET /api/plot - plot graphs according to the given parameters
+// POST / - plot graphs according to the given parameters
 func (s *Rest) plotGraphsCtrl(w http.ResponseWriter, r *http.Request) {
 	// reading form
-	if err := r.ParseForm(); err != nil {
-		rest.SendErrorHTML(w, r, http.StatusBadRequest, err, "failed to parse form data")
-		return
-	}
-	req, err := readVals(r.Form)
+	req, err := readVals(r)
 	if err != nil {
 		rest.SendErrorHTML(w, r, http.StatusForbidden, err, "failed to read request values")
 		return
@@ -194,36 +189,30 @@ func (s *Rest) plotGraphsCtrl(w http.ResponseWriter, r *http.Request) {
 				&solver.ImprovedEuler{F: funcs.fxy},
 				&solver.Euler{F: funcs.fxy},
 			},
-			ExactSolver: &solver.Exact{
-				F: funcs.yxc,
-				C: funcs.cx0y0,
-			},
+			ExactSolver: &solver.Exact{F: funcs.yxc, C: funcs.cx0y0},
 		}
 	}
 
 	// encoding solutions plot
-	b, err := s.NumService.PlotSolutions(num.CalculateStepSize(req.N, req.X0, req.XEnd), req.X0, req.Y0, req.XEnd)
+	bSols, err := s.NumService.PlotSolutions(num.CalculateStepSize(req.N, req.X0, req.XEnd), req.X0, req.Y0, req.XEnd)
 	if err != nil {
 		rest.SendErrorHTML(w, r, http.StatusInternalServerError, err, "failed to plot solutions")
 		return
 	}
-	b64SolPlot := base64.StdEncoding.EncodeToString(b)
 
 	// encoding lte plot
-	b, err = s.NumService.PlotLocalErrors(num.CalculateStepSize(req.N, req.X0, req.XEnd), req.X0, req.Y0, req.XEnd)
+	bLTEs, err := s.NumService.PlotLocalErrors(num.CalculateStepSize(req.N, req.X0, req.XEnd), req.X0, req.Y0, req.XEnd)
 	if err != nil {
 		rest.SendErrorHTML(w, r, http.StatusInternalServerError, err, "failed to plot lte")
 		return
 	}
-	b64LTEPlot := base64.StdEncoding.EncodeToString(b)
 
 	// encoding gte plot
-	b, err = s.NumService.PlotGlobalErrors(req.NMin, req.NMax, req.X0, req.Y0, req.XEnd)
+	bGTEs, err := s.NumService.PlotGlobalErrors(req.NMin, req.NMax, req.X0, req.Y0, req.XEnd)
 	if err != nil {
 		rest.SendErrorHTML(w, r, http.StatusInternalServerError, err, "failed to plot gte")
 		return
 	}
-	b64GTEPlot := base64.StdEncoding.EncodeToString(b)
 
 	// building html template
 	buf := &bytes.Buffer{}
@@ -235,9 +224,9 @@ func (s *Rest) plotGraphsCtrl(w http.ResponseWriter, r *http.Request) {
 		N:            req.N,
 		NMin:         req.NMin,
 		NMax:         req.NMax,
-		SolutionsImg: b64SolPlot,
-		LTEImg:       b64LTEPlot,
-		GTEImg:       b64GTEPlot,
+		SolutionsImg: base64.StdEncoding.EncodeToString(bSols),
+		LTEImg:       base64.StdEncoding.EncodeToString(bLTEs),
+		GTEImg:       base64.StdEncoding.EncodeToString(bGTEs),
 		Fxy:          req.fxy,
 		Yxc:          req.yxc,
 		Cx0y0:        req.c,
@@ -263,31 +252,35 @@ type solveRequest struct {
 	c    string
 }
 
-func readVals(v url.Values) (req solveRequest, err error) {
+func readVals(r *http.Request) (req solveRequest, err error) {
+	if err := r.ParseForm(); err != nil {
+		return solveRequest{}, errors.Wrap(err, "failed to parse form data")
+	}
+
 	var x0, y0, xEnd float64
 	var n, nmin, nmax int
 
-	if len(v["x0"]) != 1 || len(v["y0"]) != 1 ||
-		len(v["x_end"]) != 1 || len(v["n"]) != 1 ||
-		len(v["nmin"]) != 1 || len(v["nmax"]) != 1 {
+	if len(r.Form["x0"]) != 1 || len(r.Form["y0"]) != 1 ||
+		len(r.Form["x_end"]) != 1 || len(r.Form["n"]) != 1 ||
+		len(r.Form["nmin"]) != 1 || len(r.Form["nmax"]) != 1 {
 		return solveRequest{}, errors.New("some fields are empty or contains more or less entries, than needed")
 	}
-	if err := json.Unmarshal([]byte(v["x0"][0]), &x0); err != nil {
+	if err := json.Unmarshal([]byte(r.Form["x0"][0]), &x0); err != nil {
 		return solveRequest{}, errors.Wrap(err, "can't read x0")
 	}
-	if err := json.Unmarshal([]byte(v["y0"][0]), &y0); err != nil {
+	if err := json.Unmarshal([]byte(r.Form["y0"][0]), &y0); err != nil {
 		return solveRequest{}, errors.Wrap(err, "can't read y0")
 	}
-	if err := json.Unmarshal([]byte(v["x_end"][0]), &xEnd); err != nil {
+	if err := json.Unmarshal([]byte(r.Form["x_end"][0]), &xEnd); err != nil {
 		return solveRequest{}, errors.Wrap(err, "can't read xEnd")
 	}
-	if err := json.Unmarshal([]byte(v["n"][0]), &n); err != nil {
+	if err := json.Unmarshal([]byte(r.Form["n"][0]), &n); err != nil {
 		return solveRequest{}, errors.Wrap(err, "can't read n")
 	}
-	if err := json.Unmarshal([]byte(v["nmin"][0]), &nmin); err != nil {
+	if err := json.Unmarshal([]byte(r.Form["nmin"][0]), &nmin); err != nil {
 		return solveRequest{}, errors.Wrap(err, "can't read nmin")
 	}
-	if err := json.Unmarshal([]byte(v["nmax"][0]), &nmax); err != nil {
+	if err := json.Unmarshal([]byte(r.Form["nmax"][0]), &nmax); err != nil {
 		return solveRequest{}, errors.Wrap(err, "can't read nmax")
 	}
 
@@ -298,9 +291,9 @@ func readVals(v url.Values) (req solveRequest, err error) {
 		N:    n,
 		NMax: nmax,
 		NMin: nmin,
-		fxy:  v["fxy"][0],
-		yxc:  v["yxc"][0],
-		c:    v["c"][0],
+		fxy:  r.Form["fxy"][0],
+		yxc:  r.Form["yxc"][0],
+		c:    r.Form["c"][0],
 	}, nil
 }
 
