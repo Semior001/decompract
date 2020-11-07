@@ -1,13 +1,14 @@
-// Package num provides methods to solve differential equations in num methods,
-// plot graphs of these solutions, calculate errors and plot the graphs of errors
+// Package service provides methods to solve differential equations in num methods,
+// plot graphs of these solutions, calculate errors and plot the graphs of errors.
 package service
 
 import (
+	"math"
+
 	"github.com/Semior001/decompract/app/num"
 	"github.com/Semior001/decompract/app/num/graph"
 	"github.com/Semior001/decompract/app/num/solver"
 	"github.com/pkg/errors"
-	"math"
 )
 
 // Service provides methods to operate solvers, plot a graph, calculate errors
