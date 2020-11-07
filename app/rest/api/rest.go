@@ -352,6 +352,16 @@ func prepareFuncs(fxyStr, yxcStr, cStr string) (parsedFuncs, error) {
 			}
 			return math.Pi, nil
 		}),
+		"sin": govaluate.ExpressionFunction(func(args ...interface{}) (interface{}, error) {
+			if len(args) != 1 {
+				return nil, errors.New("sin takes only 1 argument")
+			}
+			p, ok := args[0].(float64)
+			if !ok {
+				return nil, errors.New("argument is not of type float64")
+			}
+			return math.Sin(p), nil
+		}),
 	}
 
 	fxyExpr, err := govaluate.NewEvaluableExpressionWithFunctions(fxyStr, funcs)
