@@ -18,13 +18,32 @@
 				<h2>DEComPract</h2>
 				<p>Differential Equations Computational Practicum, Yelshat Duskaliyev, B19-04</p>
 				<p>I (Yelshat Duskaliyev) have got an 8th variant, which is:</p>
-				<p>f(x,y) = y<sup>2</sup>e<sup>x</sup>-2y</p>
+				<p>f(x,y) = y*y*exp(x) - 2*y</p>
+				<p>y(x,c) = exp(-x) / (c*exp(x) + 1)</p>
+				<p>C(x0, y0) = (exp(-x0) - y0) / (y0 * exp(x0))</p>
 				<p>y<sub>0</sub>=1</p>
 				<p>x<sub>0</sub>=-4</p>
 				<p>X = 4</p>
 			</div>
 			<ul >
-
+				<li id="li_7" >
+					<label class="description" for="fxy">f(x,y), also known as y' </label>
+					<div>
+						<input id="element_7" name="fxy" class="element text medium" type="text" maxlength="255" value=""/>
+					</div>
+				</li>
+				<li id="li_8" >
+					<label class="description" for="yxc">y(x,c), also known as the exact solution </label>
+					<div>
+						<input id="element_8" name="yxc" class="element text medium" type="text" maxlength="255" value=""/>
+					</div>
+				</li>
+				<li id="li_9" >
+					<label class="description" for="element_9">C(x0,y0), constant, which is needed for exact solution </label>
+					<div>
+						<input id="element_9" name="c" class="element text medium" type="text" maxlength="255" value=""/>
+					</div>
+				</li>
 				<li id="li_1" >
 					<label class="description" for="x0">Initial x (x<sub>0</sub>) </label>
 					<div>

@@ -3,6 +3,7 @@ module github.com/Semior001/decompract
 go 1.14
 
 require (
+	github.com/Knetic/govaluate v3.0.0+incompatible
 	github.com/go-chi/chi v4.1.1+incompatible
 	github.com/go-chi/httprate v0.4.0
 	github.com/go-chi/render v1.0.1

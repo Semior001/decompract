@@ -6,17 +6,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"math"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
 
-	// adding statik files, for serving form
-	_ "github.com/Semior001/decompract/app/statik"
-	"github.com/rakyll/statik/fs"
+	"github.com/Semior001/decompract/app/num/solver"
 
 	"github.com/Semior001/decompract/app/num/service"
+	// adding statik files, for serving form
+	_ "github.com/Semior001/decompract/app/statik"
 
 	"github.com/Semior001/decompract/app/num"
 
@@ -30,6 +31,8 @@ import (
 	"github.com/go-chi/httprate"
 	log "github.com/go-pkgz/lgr"
 	R "github.com/go-pkgz/rest"
+
+	"github.com/Knetic/govaluate"
 )
 
 const plotHTMLTmpl = `<!DOCTYPE html>
@@ -128,15 +131,15 @@ func (s *Rest) routes() chi.Router {
 func addFileServer(r chi.Router, path string, root http.FileSystem) {
 	var webFS http.Handler
 
-	statikFS, err := fs.New()
-	if err != nil {
-		log.Printf("[DEBUG] no embedded assets loaded, %s", err)
-		log.Printf("[INFO] run file server for %s, path %s", root, path)
-		webFS = http.FileServer(root)
-	} else {
-		log.Printf("[INFO] run file server for %s, embedded", root)
-		webFS = http.FileServer(statikFS)
-	}
+	//statikFS, err := fs.New()
+	//if err != nil {
+	//	log.Printf("[DEBUG] no embedded assets loaded, %s", err)
+	log.Printf("[INFO] run file server for %s, path %s", root, path)
+	webFS = http.FileServer(root)
+	//} else {
+	//	log.Printf("[INFO] run file server for %s, embedded", root)
+	//	webFS = http.FileServer(statikFS)
+	//}
 
 	origPath := path
 	webFS = http.StripPrefix(path, webFS)
@@ -167,6 +170,94 @@ func (s *Rest) plotGraphsCtrl(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		rest.SendErrorHTML(w, r, http.StatusForbidden, err, "failed to read request values")
 		return
+	}
+
+	funcs := map[string]govaluate.ExpressionFunction{
+		"exp": govaluate.ExpressionFunction(func(args ...interface{}) (interface{}, error) {
+			if len(args) != 1 {
+				return nil, errors.New("exponent takes only 1 argument")
+			}
+			p, ok := args[0].(float64)
+			if !ok {
+				return nil, errors.New("argument is not of type float64")
+			}
+			return math.Exp(p), nil
+		}),
+	}
+
+	fxyExpr, err := govaluate.NewEvaluableExpressionWithFunctions(req.fxy, funcs)
+	if err != nil {
+		rest.SendErrorHTML(w, r, http.StatusBadRequest, err, "can't parse fxy expression")
+		return
+	}
+	fxy := func(x, y float64) (float64, error) {
+		params := map[string]interface{}{
+			"x": x,
+			"y": y,
+		}
+		resExpr, err := fxyExpr.Evaluate(params)
+		if err != nil {
+			return 0, errors.Wrap(err, "failed to evaluate expression")
+		}
+		res, ok := resExpr.(float64)
+		if !ok {
+			return 0, errors.Wrap(err, "result is not float64")
+		}
+		return res, nil
+	}
+
+	yxcExpr, err := govaluate.NewEvaluableExpressionWithFunctions(req.yxc, funcs)
+	if err != nil {
+		rest.SendErrorHTML(w, r, http.StatusBadRequest, err, "can't parse yxc expression")
+		return
+	}
+
+	cExpr, err := govaluate.NewEvaluableExpressionWithFunctions(req.c, funcs)
+	if err != nil {
+		rest.SendErrorHTML(w, r, http.StatusBadRequest, err, "can't parse c expression")
+		return
+	}
+
+	// initializing services
+	s.NumService = &service.Service{
+		Plotter: s.NumService.Plotter,
+		Solvers: []solver.Interface{
+			&solver.RungeKutta{F: fxy},
+			&solver.ImprovedEuler{F: fxy},
+			&solver.Euler{F: fxy},
+		},
+		ExactSolver: &solver.Exact{
+			F: func(x, c float64) (float64, error) {
+				params := map[string]interface{}{
+					"x": x,
+					"c": c,
+				}
+				resExpr, err := yxcExpr.Evaluate(params)
+				if err != nil {
+					return 0, errors.Wrap(err, "failed to evaluate expression")
+				}
+				res, ok := resExpr.(float64)
+				if !ok {
+					return 0, errors.Wrap(err, "result is not float64")
+				}
+				return res, nil
+			},
+			C: func(x0, y0 float64) (float64, error) {
+				params := map[string]interface{}{
+					"x0": x0,
+					"y0": y0,
+				}
+				resExpr, err := cExpr.Evaluate(params)
+				if err != nil {
+					return 0, errors.Wrap(err, "failed to evaluate expression")
+				}
+				res, ok := resExpr.(float64)
+				if !ok {
+					return 0, errors.Wrap(err, "result is not float64")
+				}
+				return res, nil
+			},
+		},
 	}
 
 	// encoding solutions plot
@@ -223,13 +314,20 @@ type solveRequest struct {
 	N    int
 	NMin int
 	NMax int
+	fxy  string
+	yxc  string
+	c    string
 }
 
 func readVals(v url.Values) (req solveRequest, err error) {
 	var x0, y0, xEnd float64
 	var n, nmin, nmax int
 
-	if len(v["x0"]) != 1 || len(v["y0"]) != 1 || len(v["x_end"]) != 1 || len(v["n"]) != 1 || len(v["nmin"]) != 1 || len(v["nmax"]) != 1 {
+	if len(v["x0"]) != 1 || len(v["y0"]) != 1 ||
+		len(v["x_end"]) != 1 || len(v["n"]) != 1 ||
+		len(v["nmin"]) != 1 || len(v["nmax"]) != 1 ||
+		len(v["fxy"]) != 1 || len(v["yxc"]) != 1 ||
+		len(v["c"]) != 1 {
 		return solveRequest{}, errors.New("some fields are empty or contains more or less entries, than needed")
 	}
 	if err := json.Unmarshal([]byte(v["x0"][0]), &x0); err != nil {
@@ -251,5 +349,15 @@ func readVals(v url.Values) (req solveRequest, err error) {
 		return solveRequest{}, errors.Wrap(err, "can't read nmax")
 	}
 
-	return solveRequest{X0: x0, Y0: y0, XEnd: xEnd, N: n, NMax: nmax, NMin: nmin}, nil
+	return solveRequest{
+		X0:   x0,
+		Y0:   y0,
+		XEnd: xEnd,
+		N:    n,
+		NMax: nmax,
+		NMin: nmin,
+		fxy:  v["fxy"][0],
+		yxc:  v["yxc"][0],
+		c:    v["c"][0],
+	}, nil
 }
