@@ -12,6 +12,10 @@ import (
 	"sync"
 	"time"
 
+	// adding statik files, for serving form
+	_ "github.com/Semior001/decompract/app/statik"
+	"github.com/rakyll/statik/fs"
+
 	"github.com/Semior001/decompract/app/num/service"
 
 	"github.com/Semior001/decompract/app/num"
@@ -122,8 +126,17 @@ func (s *Rest) routes() chi.Router {
 }
 
 func addFileServer(r chi.Router, path string, root http.FileSystem) {
-	log.Printf("[INFO] run file server for %s, path %s", root, path)
-	webFS := http.FileServer(root)
+	var webFS http.Handler
+
+	statikFS, err := fs.New()
+	if err != nil {
+		log.Printf("[DEBUG] no embedded assets loaded, %s", err)
+		log.Printf("[INFO] run file server for %s, path %s", root, path)
+		webFS = http.FileServer(root)
+	} else {
+		log.Printf("[INFO] run file server for %s, embedded", root)
+		webFS = http.FileServer(statikFS)
+	}
 
 	origPath := path
 	webFS = http.StripPrefix(path, webFS)
