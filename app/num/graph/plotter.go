@@ -21,15 +21,15 @@ const h = w
 type Plotter struct{}
 
 // Plot the set of lines and get the reader of the result plot
-func (pl *Plotter) Plot(title string, lines []num.Line) ([]byte, error) {
+func (pl *Plotter) Plot(title, xTitle, yTitle string, lines []num.Line) ([]byte, error) {
 	p, err := plot.New()
 	if err != nil {
 		return nil, errors.Wrap(err, "can't create new plot")
 	}
 
 	p.Title.Text = title
-	p.X.Label.Text = "X"
-	p.Y.Label.Text = "Y"
+	p.X.Label.Text = xTitle
+	p.Y.Label.Text = yTitle
 
 	// combining lines in one slice to satisfy idiotic plotutil's interface
 	var ls []interface{}

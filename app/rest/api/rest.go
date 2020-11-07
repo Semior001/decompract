@@ -39,7 +39,7 @@ const plotHTMLTmpl = `<!DOCTYPE html>
 <div style="text-align: center; font-family: Arial, sans-serif; font-size: 18px;">
     <h1 style="position: relative; color: #4fbbd6; margin-top: 0.2em;">DEComPract</h1>
     <h3 style="position: relative; color: #666666; margin-top: 0.2em;">Yelshat Duskaliyev, B19-04</h3>
-    <p>x<sub>0</sub> = {{printf "%.4f" .X0}}; y<sub>0</sub> = {{printf "%.4f" .Y0}}; X = {{printf "%.4f" .XEnd}}; N = {{.N}}; N<sub>min</sub> = {{printf "%.4f"  .NMin}}; N<sub>max</sub> = {{printf "%.4f" .NMax}}</p>
+    <p>x<sub>0</sub> = {{printf "%.4f" .X0}}; y<sub>0</sub> = {{printf "%.4f" .Y0}}; X = {{printf "%.4f" .XEnd}}; N = {{.N}}; N<sub>min</sub> = {{.NMin}}; N<sub>max</sub> = {{.NMax}}</p>
     <a href="/">Enter another data</a>
 </div>
 <table width="100%" style="align-content: center; font-family: Arial, sans-serif; font-size: 18px; position: relative; margin-top: 0.2em;">
@@ -57,8 +57,8 @@ type plotTmplData struct {
 	Y0           float64
 	XEnd         float64
 	N            int
-	NMin         float64
-	NMax         float64
+	NMin         int
+	NMax         int
 	SolutionsImg string
 	LTEImg       string
 	GTEImg       string
@@ -172,6 +172,14 @@ func (s *Rest) plotGraphsCtrl(w http.ResponseWriter, r *http.Request) {
 	}
 	b64LTEPlot := base64.StdEncoding.EncodeToString(b)
 
+	// encoding gte plot
+	b, err = s.NumService.PlotGlobalErrors(req.NMin, req.NMax, req.X0, req.Y0, req.XEnd)
+	if err != nil {
+		rest.SendErrorHTML(w, r, http.StatusInternalServerError, err, "failed to plot gte")
+		return
+	}
+	b64GTEPlot := base64.StdEncoding.EncodeToString(b)
+
 	// building html template
 	buf := &bytes.Buffer{}
 	tmpl := template.Must(template.New("plot").Parse(plotHTMLTmpl))
@@ -184,6 +192,7 @@ func (s *Rest) plotGraphsCtrl(w http.ResponseWriter, r *http.Request) {
 		NMax:         req.NMax,
 		SolutionsImg: b64SolPlot,
 		LTEImg:       b64LTEPlot,
+		GTEImg:       b64GTEPlot,
 	})
 	if err != nil {
 		rest.SendErrorHTML(w, r, http.StatusInternalServerError, err, "can't execute template")
@@ -199,13 +208,13 @@ type solveRequest struct {
 	Y0   float64
 	XEnd float64
 	N    int
-	NMin float64
-	NMax float64
+	NMin int
+	NMax int
 }
 
 func readVals(v url.Values) (req solveRequest, err error) {
-	var x0, y0, xEnd, nmin, nmax float64
-	var n int
+	var x0, y0, xEnd float64
+	var n, nmin, nmax int
 
 	if len(v["x0"]) != 1 || len(v["y0"]) != 1 || len(v["x_end"]) != 1 || len(v["n"]) != 1 || len(v["nmin"]) != 1 || len(v["nmax"]) != 1 {
 		return solveRequest{}, errors.New("some fields are empty or contains more or less entries, than needed")
