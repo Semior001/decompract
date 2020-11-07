@@ -316,6 +316,42 @@ func prepareFuncs(fxyStr, yxcStr, cStr string) (parsedFuncs, error) {
 			}
 			return math.Exp(p), nil
 		}),
+		"ln": govaluate.ExpressionFunction(func(args ...interface{}) (interface{}, error) {
+			if len(args) != 1 {
+				return nil, errors.New("ln takes only 1 argument")
+			}
+			p, ok := args[0].(float64)
+			if !ok {
+				return nil, errors.New("argument is not of type float64")
+			}
+			return math.Log(p), nil
+		}),
+		"tan": govaluate.ExpressionFunction(func(args ...interface{}) (interface{}, error) {
+			if len(args) != 1 {
+				return nil, errors.New("tan takes only 1 argument")
+			}
+			p, ok := args[0].(float64)
+			if !ok {
+				return nil, errors.New("argument is not of type float64")
+			}
+			return math.Tan(p), nil
+		}),
+		"cos": govaluate.ExpressionFunction(func(args ...interface{}) (interface{}, error) {
+			if len(args) != 1 {
+				return nil, errors.New("cos takes only 1 argument")
+			}
+			p, ok := args[0].(float64)
+			if !ok {
+				return nil, errors.New("argument is not of type float64")
+			}
+			return math.Cos(p), nil
+		}),
+		"pi": govaluate.ExpressionFunction(func(args ...interface{}) (interface{}, error) {
+			if len(args) > 0 {
+				return nil, errors.New("pi does not require any arguments")
+			}
+			return math.Pi, nil
+		}),
 	}
 
 	fxyExpr, err := govaluate.NewEvaluableExpressionWithFunctions(fxyStr, funcs)
