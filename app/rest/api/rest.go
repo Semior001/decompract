@@ -159,19 +159,14 @@ func addFileServer(r chi.Router, path string, root http.FileSystem) {
 	})
 }
 
-// GET /api/plot - plot graphs according to the given parameters
-func (s *Rest) plotGraphsCtrl(w http.ResponseWriter, r *http.Request) {
-	// reading form
-	if err := r.ParseForm(); err != nil {
-		rest.SendErrorHTML(w, r, http.StatusBadRequest, err, "failed to parse form data")
-		return
-	}
-	req, err := readVals(r.Form)
-	if err != nil {
-		rest.SendErrorHTML(w, r, http.StatusForbidden, err, "failed to read request values")
-		return
-	}
+type parsedFuncs struct {
+	fxy   func(x, y float64) (float64, error)
+	yxc   func(x, c float64) (float64, error)
+	cx0y0 func(x0, y0 float64) (float64, error)
+}
 
+// prepareFuncs parses the string expressions and prepares the functions for the future evaluation
+func prepareFuncs(fxyStr, yxcStr, cStr string) (parsedFuncs, error) {
 	funcs := map[string]govaluate.ExpressionFunction{
 		"exp": govaluate.ExpressionFunction(func(args ...interface{}) (interface{}, error) {
 			if len(args) != 1 {
@@ -185,10 +180,9 @@ func (s *Rest) plotGraphsCtrl(w http.ResponseWriter, r *http.Request) {
 		}),
 	}
 
-	fxyExpr, err := govaluate.NewEvaluableExpressionWithFunctions(req.fxy, funcs)
+	fxyExpr, err := govaluate.NewEvaluableExpressionWithFunctions(fxyStr, funcs)
 	if err != nil {
-		rest.SendErrorHTML(w, r, http.StatusBadRequest, err, "can't parse fxy expression")
-		return
+		return parsedFuncs{}, errors.Wrap(err, "can't parse f(x,y)")
 	}
 	fxy := func(x, y float64) (float64, error) {
 		params := map[string]interface{}{
@@ -206,15 +200,67 @@ func (s *Rest) plotGraphsCtrl(w http.ResponseWriter, r *http.Request) {
 		return res, nil
 	}
 
-	yxcExpr, err := govaluate.NewEvaluableExpressionWithFunctions(req.yxc, funcs)
+	yxcExpr, err := govaluate.NewEvaluableExpressionWithFunctions(yxcStr, funcs)
 	if err != nil {
-		rest.SendErrorHTML(w, r, http.StatusBadRequest, err, "can't parse yxc expression")
+		return parsedFuncs{}, errors.Wrap(err, "can't parse y(x,c)")
+	}
+
+	cExpr, err := govaluate.NewEvaluableExpressionWithFunctions(cStr, funcs)
+	if err != nil {
+		return parsedFuncs{}, errors.Wrap(err, "can't parse c(x0,y0)")
+	}
+
+	yxc := func(x, c float64) (float64, error) {
+		params := map[string]interface{}{
+			"x": x,
+			"c": c,
+		}
+		resExpr, err := yxcExpr.Evaluate(params)
+		if err != nil {
+			return 0, errors.Wrap(err, "failed to evaluate expression")
+		}
+		res, ok := resExpr.(float64)
+		if !ok {
+			return 0, errors.Wrap(err, "result is not float64")
+		}
+		return res, nil
+	}
+
+	cx0y0 := func(x0, y0 float64) (float64, error) {
+		params := map[string]interface{}{
+			"x0": x0,
+			"y0": y0,
+		}
+		resExpr, err := cExpr.Evaluate(params)
+		if err != nil {
+			return 0, errors.Wrap(err, "failed to evaluate expression")
+		}
+		res, ok := resExpr.(float64)
+		if !ok {
+			return 0, errors.Wrap(err, "result is not float64")
+		}
+		return res, nil
+	}
+
+	return parsedFuncs{fxy: fxy, yxc: yxc, cx0y0: cx0y0}, nil
+}
+
+// GET /api/plot - plot graphs according to the given parameters
+func (s *Rest) plotGraphsCtrl(w http.ResponseWriter, r *http.Request) {
+	// reading form
+	if err := r.ParseForm(); err != nil {
+		rest.SendErrorHTML(w, r, http.StatusBadRequest, err, "failed to parse form data")
+		return
+	}
+	req, err := readVals(r.Form)
+	if err != nil {
+		rest.SendErrorHTML(w, r, http.StatusForbidden, err, "failed to read request values")
 		return
 	}
 
-	cExpr, err := govaluate.NewEvaluableExpressionWithFunctions(req.c, funcs)
+	funcs, err := prepareFuncs(req.fxy, req.yxc, req.c)
 	if err != nil {
-		rest.SendErrorHTML(w, r, http.StatusBadRequest, err, "can't parse c expression")
+		rest.SendErrorHTML(w, r, http.StatusBadRequest, err, "failed to parse functions")
 		return
 	}
 
@@ -222,41 +268,13 @@ func (s *Rest) plotGraphsCtrl(w http.ResponseWriter, r *http.Request) {
 	s.NumService = &service.Service{
 		Plotter: s.NumService.Plotter,
 		Solvers: []solver.Interface{
-			&solver.RungeKutta{F: fxy},
-			&solver.ImprovedEuler{F: fxy},
-			&solver.Euler{F: fxy},
+			&solver.RungeKutta{F: funcs.fxy},
+			&solver.ImprovedEuler{F: funcs.fxy},
+			&solver.Euler{F: funcs.fxy},
 		},
 		ExactSolver: &solver.Exact{
-			F: func(x, c float64) (float64, error) {
-				params := map[string]interface{}{
-					"x": x,
-					"c": c,
-				}
-				resExpr, err := yxcExpr.Evaluate(params)
-				if err != nil {
-					return 0, errors.Wrap(err, "failed to evaluate expression")
-				}
-				res, ok := resExpr.(float64)
-				if !ok {
-					return 0, errors.Wrap(err, "result is not float64")
-				}
-				return res, nil
-			},
-			C: func(x0, y0 float64) (float64, error) {
-				params := map[string]interface{}{
-					"x0": x0,
-					"y0": y0,
-				}
-				resExpr, err := cExpr.Evaluate(params)
-				if err != nil {
-					return 0, errors.Wrap(err, "failed to evaluate expression")
-				}
-				res, ok := resExpr.(float64)
-				if !ok {
-					return 0, errors.Wrap(err, "result is not float64")
-				}
-				return res, nil
-			},
+			F: funcs.yxc,
+			C: funcs.cx0y0,
 		},
 	}
 
